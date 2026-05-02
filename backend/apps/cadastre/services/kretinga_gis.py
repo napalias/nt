@@ -49,7 +49,6 @@ def query_feature_layer(
         "outSR": "4326",
         "f": "geojson",
         "returnGeometry": "true",
-        "resultRecordCount": max_records,
     }
 
     if bbox:
