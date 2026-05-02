@@ -6,10 +6,12 @@
 		getEvaluated,
 		createSavedSearch,
 		fetchLayer,
+		fetchFullSearch,
 		type ListingResult,
 		type GeocodeResult,
 		type EvaluationResult,
-		type GeoJsonCollection
+		type GeoJsonCollection,
+		type FullSearchLayerCounts
 	} from '$lib/api/client';
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import Filters from '$lib/components/Filters.svelte';
@@ -231,6 +233,34 @@
 			if (config.enabled) {
 				loadLayer(config.id);
 			}
+		}
+	}
+
+	let fullSearchCounts = $state<FullSearchLayerCounts | null>(null);
+	let fullSearchLoading = $state(false);
+	let fullSearchError = $state('');
+
+	async function loadFullSearch() {
+		fullSearchLoading = true;
+		fullSearchError = '';
+		try {
+			const resp = await fetchFullSearch({
+				lat: center.lat,
+				lng: center.lng,
+				radius_m: radiusM
+			});
+			fullSearchCounts = {
+				listings: resp.listings.length,
+				permits: resp.permits.length,
+				developers: resp.developers.length,
+				planning: resp.planning.length,
+				heritage: resp.restrictions.heritage.length,
+				restrictions: resp.restrictions.special_land_use.length
+			};
+		} catch {
+			fullSearchError = 'Nepavyko gauti duomenu';
+		} finally {
+			fullSearchLoading = false;
 		}
 	}
 

@@ -23,6 +23,7 @@ export interface ListingResult {
 	lng: number;
 	photo_urls: string[];
 	distance_m: number;
+	cadastral_number?: string;
 }
 
 export interface SearchResponse {
@@ -298,4 +299,37 @@ export interface PropertyReport {
 
 export async function getPropertyReport(cadastralNumber: string): Promise<PropertyReport> {
 	return fetchJson<PropertyReport>(`/api/property/${encodeURIComponent(cadastralNumber)}`);
+}
+
+// --- Full (multi-layer) search ---
+
+export interface FullSearchResponse {
+	center: { lat: number; lng: number };
+	radius_m: number;
+	listings: Record<string, unknown>[];
+	permits: PermitResult[];
+	developers: DeveloperResult[];
+	planning: PlanningResult[];
+	restrictions: {
+		heritage: { kvr_code: string; name: string; protection_level: string }[];
+		special_land_use: { category: string; description: string }[];
+	};
+}
+
+export interface FullSearchLayerCounts {
+	listings: number;
+	permits: number;
+	developers: number;
+	planning: number;
+	heritage: number;
+	restrictions: number;
+}
+
+export async function fetchFullSearch(params: {
+	lat: number;
+	lng: number;
+	radius_m: number;
+}): Promise<FullSearchResponse> {
+	const query = buildQuery(params as unknown as Record<string, unknown>);
+	return fetchJson<FullSearchResponse>(`/api/search/full${query}`);
 }

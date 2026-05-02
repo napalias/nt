@@ -151,11 +151,50 @@
 						<span class="text-gray-900">{listing.floor}{listing.total_floors ? ` / ${listing.total_floors}` : ''}</span>
 					</div>
 				{/if}
+				{#if listing.cadastral_number}
+					<div class="flex justify-between">
+						<span class="text-gray-500">Kadastro Nr.</span>
+						<a
+							href="/property/{listing.cadastral_number}"
+							class="text-purple-600 hover:underline"
+						>
+							{listing.cadastral_number}
+						</a>
+					</div>
+				{/if}
 				<div class="flex justify-between">
 					<span class="text-gray-500">Šaltinis</span>
 					<a href={listing.source_url} target="_blank" class="text-blue-600 hover:underline">{listing.source}</a>
 				</div>
 			</div>
+		</div>
+
+		<!-- Action buttons -->
+		<div class="flex gap-2 border-b border-gray-100 px-4 py-3">
+			{#if listing.source_url}
+				<a
+					href={listing.source_url}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-700"
+				>
+					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+					</svg>
+					Atidaryti originale
+				</a>
+			{/if}
+			{#if listing.cadastral_number}
+				<a
+					href="/property/{listing.cadastral_number}"
+					class="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-300 px-3 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-50"
+				>
+					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+					Sklypo ataskaita
+				</a>
+			{/if}
 		</div>
 
 		<!-- AI Evaluation -->
