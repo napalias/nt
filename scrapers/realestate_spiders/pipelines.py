@@ -120,16 +120,33 @@ class NormalizePipeline:
 
 
 class GeocodePipeline:
-    """Geocode address via Nominatim if lat/lng are missing."""
+    """Geocode address via Nominatim if lat/lng are missing.
 
-    def __init__(self):
-        self.nominatim_url = getattr(settings, "NOMINATIM_URL", "http://nominatim:8080")
+    If Nominatim is unavailable, uses city-center fallback coordinates
+    so items aren't dropped. Imprecise but better than losing the listing.
+    """
+
+    CITY_FALLBACK = {
+        "kretinga": (55.8835, 21.2420),
+        "palanga": (55.9175, 21.0686),
+        "klaipėda": (55.7033, 21.1443),
+        "klaipeda": (55.7033, 21.1443),
+        "vilnius": (54.6872, 25.2797),
+        "kaunas": (54.8985, 23.9036),
+        "šiauliai": (55.9349, 23.3137),
+        "siauliai": (55.9349, 23.3137),
+        "panevėžys": (55.7348, 24.3575),
+        "panevezys": (55.7348, 24.3575),
+    }
 
     JUNK_WORDS = {
         "namai", "kotedžai", "butai", "sklypai", "sodai",
         "pardavimui", "nuomai", "pardavimas", "nuoma",
         "komercinis", "garažai", "patalpos",
     }
+
+    def __init__(self):
+        self.nominatim_url = getattr(settings, "NOMINATIM_URL", "http://nominatim:8080")
 
     def _clean_address(self, address: str) -> str:
         parts = [p.strip() for p in address.split(",")]
@@ -147,7 +164,8 @@ class GeocodePipeline:
         query = f"{address}, {city}" if city and city.lower() not in address.lower() else address
 
         if not query.strip():
-            raise DropItem(f"No address to geocode: {item.get('url')}")
+            self._apply_fallback(item)
+            return item
 
         try:
             resp = requests.get(
@@ -158,7 +176,7 @@ class GeocodePipeline:
                     "limit": 1,
                     "countrycodes": "lt",
                 },
-                timeout=10,
+                timeout=5,
             )
             resp.raise_for_status()
             results = resp.json()
@@ -167,42 +185,69 @@ class GeocodePipeline:
                 item["latitude"] = float(results[0]["lat"])
                 item["longitude"] = float(results[0]["lon"])
                 logger.debug("Geocoded '%s' → (%s, %s)", query, item["latitude"], item["longitude"])
-            else:
-                raise DropItem(f"Geocode returned no results for: {query}")
+                return item
 
-        except requests.RequestException as exc:
-            logger.warning("Nominatim request failed for: %s", query)
-            raise DropItem(f"Geocode failed for: {query}") from exc
+        except requests.RequestException:
+            logger.warning("Nominatim unavailable for: %s", query)
 
+        self._apply_fallback(item)
         return item
+
+    def _apply_fallback(self, item: ListingItem) -> None:
+        city = (item.get("city") or "").lower()
+        address = (item.get("address") or "").lower()
+        for name, (lat, lng) in self.CITY_FALLBACK.items():
+            if name in city or name in address:
+                item["latitude"] = lat
+                item["longitude"] = lng
+                logger.info("Fallback geocode: %s → %s center", item.get("city"), name)
+                return
+        raise DropItem(
+            f"Cannot geocode and no fallback for: {item.get('address')}"
+        )
 
 
 class DjangoWritePipeline:
     """Upsert scraped listings into the Django Listing model. Only processes ListingItem."""
+
+    def _num(self, val, type_fn=float):
+        if val is None or val == "":
+            return None
+        try:
+            return type_fn(val)
+        except (ValueError, TypeError):
+            return None
+
+    def _int(self, val):
+        return self._num(val, int)
 
     def process_item(self, item: ListingItem, spider: Spider) -> ListingItem:
         if not isinstance(item, ListingItem):
             return item
         from apps.listings.models import Listing
 
+        def s(val, maxlen=None):
+            v = str(val or "").strip()
+            return v[:maxlen] if maxlen else v
+
         defaults = {
-            "source_url": item["url"],
-            "content_hash": item.get("_content_hash", ""),
-            "title": item["title"],
+            "source_url": item["url"][:500],
+            "content_hash": s(item.get("_content_hash"), 64),
+            "title": s(item.get("title"), 500),
             "description": item.get("description", ""),
-            "property_type": item.get("property_type", "house"),
-            "listing_type": item.get("listing_type", "sale"),
-            "price": item.get("price"),
-            "currency": item.get("currency", "EUR"),
-            "area_sqm": item.get("area_sqm"),
-            "plot_area_ares": item.get("plot_area_ares"),
-            "rooms": item.get("rooms"),
-            "floor": item.get("floor"),
-            "total_floors": item.get("total_floors"),
-            "year_built": item.get("year_built"),
-            "building_type": item.get("building_type", ""),
-            "heating_type": item.get("heating_type", ""),
-            "energy_class": item.get("energy_class", ""),
+            "property_type": s(item.get("property_type", "house"), 16),
+            "listing_type": s(item.get("listing_type", "sale"), 8),
+            "price": self._num(item.get("price")),
+            "currency": s(item.get("currency", "EUR"), 3),
+            "area_sqm": self._num(item.get("area_sqm")),
+            "plot_area_ares": self._num(item.get("plot_area_ares")),
+            "rooms": self._int(item.get("rooms")),
+            "floor": self._int(item.get("floor")),
+            "total_floors": self._int(item.get("total_floors")),
+            "year_built": self._int(item.get("year_built")),
+            "building_type": s(item.get("building_type"), 16),
+            "heating_type": s(item.get("heating_type"), 64),
+            "energy_class": s(item.get("energy_class"), 8),
             "is_new_construction": item.get("is_new_construction", False),
             "address_raw": item.get("address", ""),
             "city": item.get("city", ""),
@@ -221,8 +266,8 @@ class DjangoWritePipeline:
         }
 
         obj, created = Listing.objects.update_or_create(
-            source=item["source"],
-            source_id=item["source_id"],
+            source=s(item["source"], 32),
+            source_id=s(item["source_id"], 64),
             defaults=defaults,
         )
 

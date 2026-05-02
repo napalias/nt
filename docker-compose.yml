@@ -40,11 +40,16 @@ services:
       REPLICATION_URL: https://download.geofabrik.de/europe/lithuania-updates/
       NOMINATIM_PASSWORD: nominatim
       IMPORT_WIKIPEDIA: "false"
+      THREADS: 2
     ports:
       - "7070:8080"
     volumes:
       - nominatim_data:/var/lib/postgresql/14/main
-    shm_size: 1gb
+    shm_size: 2gb
+    deploy:
+      resources:
+        limits:
+          memory: 4g
 
   backend:
     build:
