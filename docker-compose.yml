@@ -33,7 +33,7 @@ services:
   # First boot downloads ~250MB and indexes for ~5–10 minutes.
   # After that, instant. Endpoint: http://localhost:7070/search?q=...
   nominatim:
-    image: mediagis/nominatim:4.4
+    image: mediagis/nominatim:4.5
     container_name: re_nominatim
     environment:
       PBF_URL: https://download.geofabrik.de/europe/lithuania-latest.osm.pbf
@@ -41,7 +41,6 @@ services:
       NOMINATIM_PASSWORD: nominatim
       IMPORT_WIKIPEDIA: "false"
       THREADS: 2
-      OSMPGSQL_CACHE: 2048
     ports:
       - "7070:8080"
     volumes:
