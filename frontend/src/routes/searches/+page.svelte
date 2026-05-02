@@ -4,12 +4,16 @@
 
 	let searches = $state<SavedSearch[]>([]);
 	let loading = $state(true);
+	let loadError = $state('');
+	let removeError = $state('');
 
 	async function load() {
 		loading = true;
+		loadError = '';
 		try {
 			searches = await getSavedSearches();
-		} catch {
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : 'Nepavyko uzkrauti paiešku';
 			searches = [];
 		} finally {
 			loading = false;
@@ -17,8 +21,13 @@
 	}
 
 	async function remove(id: number) {
-		await deleteSavedSearch(id);
-		searches = searches.filter((s) => s.id !== id);
+		removeError = '';
+		try {
+			await deleteSavedSearch(id);
+			searches = searches.filter((s) => s.id !== id);
+		} catch {
+			removeError = 'Nepavyko pasalinti paieskos. Bandykite dar karta.';
+		}
 	}
 
 	function searchUrl(s: SavedSearch): string {
@@ -52,16 +61,6 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
-	<header class="border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
-		<div class="mx-auto flex max-w-3xl items-center gap-4">
-			<a href="/" class="text-lg font-bold text-gray-900">NT Paieška</a>
-			<span class="text-sm text-gray-400">/</span>
-			<h1 class="text-sm font-medium text-gray-700">Išsaugotos paieškos</h1>
-			<div class="flex-1"></div>
-			<a href="/search" class="text-sm text-blue-600 hover:underline">Paieška</a>
-		</div>
-	</header>
-
 	<main class="mx-auto max-w-3xl px-4 py-8">
 		<div class="rounded-lg border border-gray-200 bg-white shadow-sm">
 			<div class="border-b border-gray-100 px-6 py-4">
@@ -71,6 +70,20 @@
 					ir siunčia pranešimą el. paštu.
 				</p>
 			</div>
+
+			{#if loadError}
+				<div class="px-6 py-4">
+					<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+						{loadError}
+					</div>
+				</div>
+			{:else if removeError}
+				<div class="px-6 py-4">
+					<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+						{removeError}
+					</div>
+				</div>
+			{/if}
 
 			{#if loading}
 				<div class="flex items-center justify-center py-12">

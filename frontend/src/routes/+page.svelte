@@ -22,6 +22,7 @@
 	let preferences = $state<PreferenceResult[]>([]);
 	let stats = $state({ total: 0, matches: 0, reviews: 0, skips: 0 });
 	let loading = $state(true);
+	let loadError = $state('');
 
 	onMount(async () => {
 		try {
@@ -45,6 +46,8 @@
 				reviews: allEvals.filter((e) => e.verdict === 'review').length,
 				skips: allEvals.filter((e) => e.verdict === 'skip').length
 			};
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : 'Nepavyko uzkrauti duomenu';
 		} finally {
 			loading = false;
 		}
@@ -99,6 +102,14 @@
 			</a>
 		</div>
 	</div>
+
+	{#if loadError}
+		<div class="mx-auto max-w-xl px-4 py-4">
+			<div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+				{loadError}
+			</div>
+		</div>
+	{/if}
 
 	{#if !loading}
 		<!-- Stats -->

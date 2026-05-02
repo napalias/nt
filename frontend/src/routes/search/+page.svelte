@@ -351,6 +351,49 @@
 			/>
 			<div class="mt-6 border-t border-gray-200 pt-4">
 				<LayerPanel layers={layerConfigs} ontoggle={handleLayerToggle} />
+
+				<button
+					type="button"
+					onclick={loadFullSearch}
+					disabled={fullSearchLoading}
+					class="mt-3 w-full rounded border border-gray-300 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+				>
+					{fullSearchLoading ? 'Kraunama...' : 'Rodyti visus sluoksnius'}
+				</button>
+
+				{#if fullSearchError}
+					<p class="mt-2 text-xs text-red-500">{fullSearchError}</p>
+				{/if}
+
+				{#if fullSearchCounts}
+					<div class="mt-3 space-y-1.5">
+						<h4 class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Rasta aplinkoje</h4>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Skelbimai</span>
+							<span class="font-medium text-gray-900">{fullSearchCounts.listings}</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Leidimai</span>
+							<span class="font-medium text-blue-700">{fullSearchCounts.permits}</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Planai</span>
+							<span class="font-medium text-green-700">{fullSearchCounts.planning}</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Vystytojai</span>
+							<span class="font-medium text-gray-900">{fullSearchCounts.developers}</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Paveldas</span>
+							<span class="font-medium text-red-700">{fullSearchCounts.heritage}</span>
+						</div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-gray-600">Apribojimai</span>
+							<span class="font-medium text-orange-700">{fullSearchCounts.restrictions}</span>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</aside>
 

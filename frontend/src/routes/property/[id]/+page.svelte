@@ -34,17 +34,15 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
-	<header class="border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
-		<div class="mx-auto flex max-w-4xl items-center gap-4">
-			<a href="/" class="text-lg font-bold text-gray-900">NT Paieška</a>
-			<span class="text-sm text-gray-400">/</span>
-			<h1 class="text-sm font-medium text-gray-700">Sklypas {cadastralNumber}</h1>
-			<div class="flex-1"></div>
-			<a href="/search" class="text-sm text-blue-600 hover:underline">Paieška</a>
-		</div>
-	</header>
+	<div class="mx-auto max-w-4xl px-4 py-4">
+		<nav class="flex items-center gap-2 text-sm text-gray-400">
+			<a href="/" class="hover:text-gray-600">Pradzia</a>
+			<span>/</span>
+			<span class="text-gray-700">Sklypas {cadastralNumber}</span>
+		</nav>
+	</div>
 
-	<main class="mx-auto max-w-4xl px-4 py-8">
+	<main class="mx-auto max-w-4xl px-4 pb-8">
 		{#if loading}
 			<div class="flex justify-center py-16">
 				<div class="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
@@ -227,6 +225,51 @@
 					<p class="text-sm text-gray-400">Duomenų apie šį sklypą nerasta.</p>
 				</div>
 			{/if}
+
+			<!-- Data source citations -->
+			<footer class="mt-8 rounded-lg border border-gray-200 bg-gray-50 px-6 py-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Saltiniai</h3>
+				<div class="mt-2 space-y-1 text-xs text-gray-500">
+					{#if report.plot}
+						<p>
+							<span class="font-medium text-gray-600">GeoPortal NTKR</span> — kadastro duomenys
+						</p>
+					{/if}
+					{#if report.permits.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">Infostatyba</span> — statybos leidimai
+						</p>
+					{/if}
+					{#if report.planning.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">TPDRIS</span> — teritoriju planavimo dokumentai
+						</p>
+					{/if}
+					{#if report.heritage.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">Kulturos vertybiu registras</span> — paveldo zonos
+						</p>
+					{/if}
+					{#if report.restrictions.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">GeoPortal SZNS</span> — specialiosios salygos
+						</p>
+					{/if}
+					{#if report.developers.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">JAR</span> — juridiniai asmenu registras
+						</p>
+					{/if}
+					{#if report.listings.length > 0}
+						<p>
+							<span class="font-medium text-gray-600">Aruodas, Domoplius</span> — NT skelbimu portalai
+						</p>
+					{/if}
+				</div>
+				<p class="mt-3 text-[10px] text-gray-400">
+					Duomenys renkami automatiskai ir gali buti netikslu. Visada patikrinkite pirminius saltinius.
+				</p>
+			</footer>
 		{/if}
 	</main>
 </div>
