@@ -23,6 +23,12 @@ CATEGORY_PATHS = {
     "sklypai": "/skelbimai/sklypai?action_type=1&page_nr={page}",
 }
 
+REGION_BOUNDS = {
+    "kretinga": "bounds[north]=56.05&bounds[south]=55.75&bounds[east]=21.55&bounds[west]=20.95",
+    "palanga": "bounds[north]=56.0&bounds[south]=55.85&bounds[east]=21.15&bounds[west]=20.9",
+    "klaipeda": "bounds[north]=55.78&bounds[south]=55.62&bounds[east]=21.25&bounds[west]=21.05",
+}
+
 PROPERTY_TYPE_MAP = {
     "namai": "house",
     "butai": "flat",
@@ -48,10 +54,13 @@ class DomopliusSpider(scrapy.Spider):
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
     }
 
-    def __init__(self, max_pages: int = 0, property_type: str = "namai", *args, **kwargs):
+    def __init__(
+        self, max_pages: int = 0, property_type: str = "namai", region: str = "", *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.max_pages = int(max_pages)
         self.property_type = property_type
+        self.region = region
         self.current_page = 1
 
     def start_requests(self):
@@ -61,6 +70,8 @@ class DomopliusSpider(scrapy.Spider):
             return
 
         url = "https://domoplius.lt" + path_template.format(page=1)
+        if self.region and self.region in REGION_BOUNDS:
+            url += "&" + REGION_BOUNDS[self.region]
         yield scrapy.Request(
             url,
             callback=self.parse_index,
@@ -93,6 +104,8 @@ class DomopliusSpider(scrapy.Spider):
 
         path_template = CATEGORY_PATHS[self.property_type]
         next_url = "https://domoplius.lt" + path_template.format(page=self.current_page)
+        if self.region and self.region in REGION_BOUNDS:
+            next_url += "&" + REGION_BOUNDS[self.region]
         yield scrapy.Request(
             next_url,
             callback=self.parse_index,
