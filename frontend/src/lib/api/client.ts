@@ -202,10 +202,7 @@ export interface GeoJsonCollection {
 	features: GeoJsonFeature[];
 }
 
-export async function fetchLayer(
-	layer: 'cadastre' | 'heritage' | 'restrictions',
-	bbox: string
-): Promise<GeoJsonCollection> {
+export async function fetchLayer(layer: string, bbox: string): Promise<GeoJsonCollection> {
 	return fetchJson<GeoJsonCollection>(`/api/layers/${layer}?bbox=${bbox}`);
 }
 
