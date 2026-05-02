@@ -41,10 +41,12 @@ services:
       NOMINATIM_PASSWORD: nominatim
       IMPORT_WIKIPEDIA: "false"
       THREADS: 2
+      FLATNODE_FILE: /nominatim/flatnode.file
     ports:
       - "7070:8080"
     volumes:
       - nominatim_data:/var/lib/postgresql/14/main
+      - nominatim_flatnode:/nominatim
     shm_size: 2gb
 
   backend:
@@ -128,4 +130,5 @@ volumes:
   postgres_data:
   redis_data:
   nominatim_data:
+  nominatim_flatnode:
   frontend_node_modules:
