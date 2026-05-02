@@ -1,0 +1,66 @@
+## Production overlay — use with: docker compose -f docker-compose.yml -f prod.yml up -d
+##
+## Overrides for production deployment:
+##   - gunicorn instead of runserver
+##   - no source mounts
+##   - multi-stage frontend build
+##   - no mailhog, no nominatim (use external)
+
+services:
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  backend:
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application
+               --bind 0.0.0.0:8000
+               --workers 4
+               --timeout 120
+               --access-logfile -
+               --error-logfile -"
+    volumes: []
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
+
+  celery_worker:
+    volumes: []
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      SENTRY_DSN: ${SENTRY_DSN:-}
+
+  celery_beat:
+    volumes: []
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      SENTRY_DSN: ${SENTRY_DSN:-}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    command: node build
+    volumes: []
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://api.example.com}
+      NODE_ENV: production
+
+  # Disable mailhog in production
+  mailhog:
+    profiles: ["disabled"]
+
+  # Disable nominatim in production (use external instance)
+  nominatim:
+    profiles: ["disabled"]

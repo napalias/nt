@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Django
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# Node
+node_modules/
+.svelte-kit/
+.pnpm-store/
+build/
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+
+# Docker
+postgres_data/
+redis_data/
+nominatim_data/
+
+# Scrapy
+.scrapy/
+httpcache/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Playwright
+playwright-browsers/

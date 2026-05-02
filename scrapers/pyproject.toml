@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "realestate-scrapers"
+version = "0.1.0"
+description = "Real estate scrapers"
+requires-python = ">=3.12"
+dependencies = [
+    "scrapy>=2.11",
+    "scrapy-playwright>=0.0.42",
+    "playwright>=1.47",
+    "curl-cffi>=0.7",
+    "fake-useragent>=1.5",
+    # Reuse Django models for the write pipeline:
+    "django>=5.0,<6.0",
+    "psycopg[binary]>=3.2",
+    "django-environ>=0.11",
+    "requests>=2.32",
+]
+
+[tool.setuptools.packages.find]
+include = ["realestate_spiders*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]

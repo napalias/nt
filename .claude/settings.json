@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose exec backend pytest *)",
+      "Bash(docker compose exec backend pytest)",
+      "Bash(docker compose exec backend python manage.py *)",
+      "Bash(docker compose exec backend ruff *)",
+      "Bash(docker compose exec frontend pnpm *)",
+      "Bash(docker compose run --rm scrapers scrapy *)",
+      "Bash(docker compose logs *)",
+      "Bash(docker compose ps*)",
+      "Bash(docker compose up *)",
+      "Bash(docker compose up -d)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/check-syntax.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/post-test-report.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

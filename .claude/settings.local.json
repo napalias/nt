@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x *)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(docker info *)",
+      "Bash(python3 -m py_compile manage.py)",
+      "Bash(python3 -m py_compile config/__init__.py)",
+      "Bash(python3 -m py_compile config/celery.py)",
+      "Bash(python3 -m py_compile config/urls.py)",
+      "Bash(python3 -m py_compile config/wsgi.py)",
+      "Bash(python3 -m py_compile /Users/napalias/Projects/my/nt/scrapers/django_setup.py)",
+      "Bash(python3 -m py_compile /Users/napalias/Projects/my/nt/scrapers/realestate_spiders/settings.py)",
+      "Bash(python3 -m py_compile /Users/napalias/Projects/my/nt/scrapers/realestate_spiders/items.py)",
+      "Bash(python3 -m py_compile /Users/napalias/Projects/my/nt/scrapers/realestate_spiders/middlewares.py)",
+      "Bash(python3 -m py_compile /Users/napalias/Projects/my/nt/scrapers/realestate_spiders/spiders/test_spider.py)",
+      "Bash(python3 *)",
+      "Bash(docker compose *)",
+      "Bash(tee /tmp/backend-build.log)",
+      "Bash(docker image *)",
+      "Bash(docker pull *)",
+      "Bash(docker buildx *)",
+      "Bash(curl -s http://localhost:8000/health/)",
+      "Bash(curl -s -o /dev/null -w \"Admin: HTTP %{http_code}\" http://localhost:8000/admin/)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(curl *)",
+      "WebFetch(domain:domoplius.lt)",
+      "Bash(python3 -m ruff check .)",
+      "Bash(ruff check *)",
+      "Bash(pip3 install *)",
+      "WebFetch(domain:localhost)",
+      "Bash(xxd /Users/napalias/Projects/my/nt/.env)",
+      "Bash(ruff format *)",
+      "WebFetch(domain:gis.kretinga.lt)",
+      "Bash(git -C /Users/napalias/Projects/my/nt status --short)",
+      "Bash(git -C /Users/napalias/Projects/my/nt diff --stat)",
+      "Bash(git -C /Users/napalias/Projects/my/nt log --oneline -5)",
+      "Bash(git *)"
+    ]
+  }
+}
