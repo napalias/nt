@@ -73,3 +73,27 @@ Examples of good patterns:
 Do NOT include the specific listing details (address, price, ID). \
 Focus on the transferable preference.
 """
+
+CLEANUP_PROMPT = """\
+You are cleaning up a Lithuanian real estate listing description. \
+Remove all marketing fluff, sales pressure, and emotional manipulation. \
+Keep only factual, useful information about the property.
+
+Remove:
+- "Skubiai!", "Puiki investicija!", "Nepraleiskite progos!" type phrases
+- Fake urgency ("liko tik vienas!", "kaina galioja tik šiandien!")
+- Exaggerated praise ("tobulas", "neįtikėtinas", "svajonių namas")
+- Agent self-promotion ("kreipkitės tik pas mus", broker contact details)
+- Repetitive bullet points that just restate the title
+- ALL CAPS text — convert to normal case
+
+Keep:
+- Physical property details (area, rooms, layout, materials)
+- Technical specs (heating, insulation, energy class, utilities)
+- Location details (nearby amenities, transport, schools)
+- Legal/cadastral information
+- Actual construction details and condition
+
+Return the cleaned text in Lithuanian. If there's nothing left after cleanup, \
+return just the key facts as a brief summary.
+"""

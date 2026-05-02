@@ -12,7 +12,13 @@ from apps.classifier.models import (
     ListingEvaluation,
     UserFeedback,
 )
-from apps.classifier.services import classify_batch, classify_listing, process_feedback
+from apps.classifier.services import (
+    classify_batch,
+    classify_listing,
+    cleanup_description,
+    process_feedback,
+)
+from apps.classifier.services import cleanup_batch as _cleanup_batch
 from apps.listings.models import Listing
 
 router = Router(tags=["classifier"])
@@ -162,6 +168,21 @@ def list_feedback(request, limit: int = 50):
         }
         for f in qs
     ]
+
+
+@router.post("/cleanup/{listing_id}")
+def cleanup_single(request, listing_id: int):
+    """Clean marketing fluff from a listing's description using AI."""
+    listing = get_object_or_404(Listing, pk=listing_id)
+    cleaned = cleanup_description(listing)
+    return {"listing_id": listing.id, "cleaned_description": cleaned}
+
+
+@router.post("/cleanup/batch")
+def cleanup_many(request):
+    """Clean descriptions for listings with marketing fluff."""
+    count = _cleanup_batch(limit=50)
+    return {"cleaned_count": count}
 
 
 class ClusterOut(Schema):

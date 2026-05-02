@@ -46,3 +46,13 @@ def cluster_listings():
     clusters = run_dedup()
     logger.info("Dedup created %d new clusters", len(clusters))
     return {"new_clusters": len(clusters)}
+
+
+@shared_task
+def cleanup_descriptions(limit: int = 50):
+    """Clean marketing fluff from listing descriptions using AI."""
+    from apps.classifier.services import cleanup_batch
+
+    count = cleanup_batch(limit=limit)
+    logger.info("Cleaned %d listing descriptions", count)
+    return {"cleaned": count}

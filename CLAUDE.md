@@ -199,13 +199,18 @@ The `.env` file (copied from `.env.example`) must define:
 - **Scrapers container uses `profiles: ["manual"]`** — it doesn't start with `docker compose up`. You must explicitly run it with `docker compose run --rm scrapers ...`.
 - **Django settings split**: `config/settings/base.py`, `dev.py`, `prod.py`. Use `DJANGO_SETTINGS_MODULE=config.settings.dev` in `.env`.
 
+## Data principles
+
+- **Every listing must link to the original ad** (`source_url`). This is shown in every UI context: listing cards, detail panels, property reports. Never display scraped data without a link back to source.
+- **Clean up marketing BS** from listing descriptions using the AI cleanup service (`apps/classifier/services.cleanup_description`). Remove fake urgency, exaggerated praise, agent self-promotion. Keep only factual property information.
+- **Cite government data sources** in the UI: "Šaltinis: GeoPortal NTKR", "Šaltinis: Infostatyba", etc.
+
 ## Don't do
 
 - Don't add Node dependencies for things that have Python equivalents (and vice versa).
 - Don't create Django apps for tiny features — extend existing ones first.
 - Don't bypass the Scrapy item pipeline by writing directly to the DB from a spider.
 - Don't hardcode 5000 (5 km) — read from `settings.DEFAULT_SEARCH_RADIUS_M`.
-- Don't add authentication until Phase 4 (see BUILD_PLAN.md).
 - Don't scrape Aruodas without `scrapy-playwright` + `curl_cffi`. Plain Scrapy will get you blocked instantly.
 - Don't editorialize about developers in the UI. Stick to facts (permit counts, dates, sizes). Don't claim quality / reputation unless sourced.
 - Don't republish gov PDFs. Link to source. Cache locally for our extraction pipeline only.

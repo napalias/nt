@@ -324,6 +324,52 @@ def extract_preferences(feedback: UserFeedback) -> list[LearnedPreference]:
     return created
 
 
+def cleanup_description(listing: Listing) -> str:
+    """Remove marketing fluff from a listing description using Claude."""
+    from apps.classifier.prompts import CLEANUP_PROMPT
+
+    if not listing.description or len(listing.description) < 20:
+        return listing.description or ""
+
+    api_key = settings.ANTHROPIC_API_KEY
+    if not api_key:
+        return listing.description
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1024,
+        system=CLEANUP_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": listing.description[:3000],
+            }
+        ],
+    )
+    cleaned = response.content[0].text.strip()
+    listing.description = cleaned
+    listing.save(update_fields=["description"])
+    logger.info("Cleaned description for listing %s", listing.pk)
+    return cleaned
+
+
+def cleanup_batch(limit: int = 50) -> int:
+    """Clean up descriptions for listings that haven't been cleaned yet."""
+    uncleaned = Listing.objects.filter(
+        is_active=True,
+        description__regex=r"(!{2,}|SKUBIAI|PUIKI INVESTICIJA|Nepraleiskite)",
+    )[:limit]
+    count = 0
+    for listing in uncleaned:
+        try:
+            cleanup_description(listing)
+            count += 1
+        except Exception:
+            logger.exception("Failed to cleanup listing %s", listing.pk)
+    return count
+
+
 def _extract_tool_input(response: anthropic.types.Message, tool_name: str) -> dict:
     for block in response.content:
         if block.type == "tool_use" and block.name == tool_name:

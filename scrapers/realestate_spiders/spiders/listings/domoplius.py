@@ -2,11 +2,9 @@
 
 Usage:
     scrapy crawl domoplius
-    scrapy crawl domoplius -a max_pages=2          # debug: limit pages
-    scrapy crawl domoplius -a property_type=namai   # houses only
-    scrapy crawl domoplius -a property_type=butai   # flats only
-
-Uses playwright for index pages (JS-rendered). Detail pages use plain requests.
+    scrapy crawl domoplius -a max_pages=2
+    scrapy crawl domoplius -a property_type=namai
+    scrapy crawl domoplius -a property_type=butai
 """
 
 from __future__ import annotations
@@ -110,76 +108,50 @@ class DomopliusSpider(scrapy.Spider):
         if not title:
             title = response.css("title::text").get("").strip()
 
-        price_text = (
-            response.css(".price .h1::text").get("")
-            or response.css("[class*='price'] .h1::text").get("")
-            or response.css("[class*='price']::text").get("")
-        )
+        all_text = response.css("body::text, body *::text").getall()
+        all_text = [t.strip() for t in all_text if t.strip()]
 
-        info_table = {}
-        for row in response.css("table.view-group tr, .obj-details tr, .group-data tr"):
-            key = row.css("th::text, td:first-child::text").get("").strip().lower()
-            value = row.css("td:last-child::text, td:nth-child(2)::text").get("").strip()
-            if key and value:
-                info_table[key] = value
+        price_text = self._extract_price(all_text)
+        area, plot_area, rooms, year_built = self._extract_summary_stats(all_text)
 
-        if not info_table:
-            for row in response.css("dl dt, .info-block .info-row"):
-                key_el = row.css("dt::text, .label::text, span:first-child::text")
-                key = key_el.get("").strip().lower()
-                value = row.css("dd::text, .value::text, span:last-child::text").get("")
-                if not value:
-                    sibling = row.xpath("following-sibling::dd[1]/text()").get("")
-                    value = sibling.strip() if sibling else ""
-                if key and value:
-                    info_table[key] = value.strip()
+        info_table = self._extract_info_table(response)
 
-        description = " ".join(
-            response.css(
-                ".description::text, .obj-comment::text, [class*='description'] p::text"
-            ).getall()
-        ).strip()
+        if not area:
+            area = self._get_field(info_table, ["plotas", "bendras plotas", "area"])
+        if not rooms:
+            rooms = self._get_field(info_table, ["kambarių", "kambariai", "rooms"])
+        if not year_built:
+            year_built = self._get_field(info_table, ["statybos metai", "metai"])
+        if not plot_area:
+            plot_area = self._get_field(info_table, ["sklypo plotas", "sklypas"])
 
-        photos = response.css(
-            "img[src*='img.domoplius'], img[src*='images.domoplius'], "
-            ".photo-gallery img::attr(src), "
-            "[class*='gallery'] img::attr(src), "
-            ".carousel img::attr(src)"
-        ).getall()
-        photos = [p for p in photos if "thumb" not in p and p.startswith("http")]
+        address = self._extract_address(title, response)
+        city = self._extract_city(title, address)
 
-        address = self._get_field(info_table, ["adresas", "vieta", "vietovė", "address"])
-        city = self._get_field(info_table, ["miestas", "city"])
-        district = self._get_field(info_table, ["rajonas", "mikrorajonas", "district"])
+        description = self._extract_description(response, all_text)
 
-        if not address:
-            breadcrumbs = response.css(".breadcrumbs a::text, .breadcrumb a::text").getall()
-            if breadcrumbs:
-                address = ", ".join(b.strip() for b in breadcrumbs if b.strip())
-
-        floor_text = self._get_field(info_table, ["aukštas", "floor"])
-        floor_val, total_floors_val = self._parse_floor(floor_text)
-
-        total_floors_direct = self._get_field(info_table, ["aukštų sk.", "aukštų skaičius"])
-        if total_floors_direct:
-            total_floors_val = total_floors_direct
+        photos = response.css("img[src*='domoplius']::attr(src)").getall()
+        photos += response.css("img[data-src*='domoplius']::attr(data-src)").getall()
+        photos += response.css("[style*='domoplius']").re(r'url\(["\']?(https://[^"\']+)["\']?\)')
+        photos = list(dict.fromkeys(p for p in photos if p.startswith("http") and "thumb" not in p))
 
         building_type_raw = self._get_field(
-            info_table, ["namo tipas", "pastato tipas", "statybos tipas", "tipas"]
+            info_table, ["namo tipas", "pastato tipas", "tipas"]
         )
         building_type = BUILDING_TYPE_MAP.get(
             building_type_raw.lower() if building_type_raw else "", ""
         )
 
-        heating_raw = self._get_field(info_table, ["šildymas", "heating"])
-        energy_raw = self._get_field(info_table, ["energijos klasė", "energy"])
+        heating = self._get_field(info_table, ["šildymas", "heating"])
+        energy = self._get_field(info_table, ["energijos klasė", "energy"])
+
+        floor_text = self._get_field(info_table, ["aukštai", "aukštas", "floor"])
+        floor_val, total_floors_val = self._parse_floor(floor_text)
 
         is_new = any(
             kw in (title + " " + description).lower()
             for kw in ["naujos statybos", "naujas namas", "nauja statyba"]
         )
-
-        year_text = self._get_field(info_table, ["statybos metai", "metai", "year"])
 
         source_id_match = re.search(r"-(\d+)\.html", response.url)
         source_id = source_id_match.group(1) if source_id_match else ""
@@ -193,23 +165,144 @@ class DomopliusSpider(scrapy.Spider):
             price=price_text,
             property_type=PROPERTY_TYPE_MAP.get(self.property_type, "house"),
             listing_type="sale",
-            area_sqm=self._get_field(info_table, ["plotas", "bendras plotas", "area"]),
-            plot_area_ares=self._get_field(info_table, ["sklypo plotas", "sklypas"]),
-            rooms=self._get_field(info_table, ["kambarių sk.", "kambariai", "rooms"]),
+            area_sqm=area,
+            plot_area_ares=plot_area,
+            rooms=rooms,
             floor=floor_val,
             total_floors=total_floors_val,
-            year_built=year_text,
+            year_built=year_built,
             building_type=building_type,
-            heating_type=heating_raw or "",
-            energy_class=energy_raw or "",
+            heating_type=heating or "",
+            energy_class=energy or "",
             is_new_construction=is_new,
-            address=address or "",
-            city=city or "",
-            district=district or "",
+            address=address,
+            city=city,
             photo_urls=photos,
             raw_data=info_table,
             scraped_at=datetime.now(UTC).isoformat(),
         )
+
+    def _extract_price(self, texts: list[str]) -> str:
+        for t in texts:
+            match = re.search(r"([\d\s]+)\s*€", t)
+            if match:
+                return match.group(0).strip()
+        return ""
+
+    def _extract_summary_stats(
+        self, texts: list[str]
+    ) -> tuple[str, str, str, str]:
+        area = plot = rooms = year = ""
+        for t in texts:
+            if not area:
+                m = re.search(r"(\d+[\.,]?\d*)\s*m²", t)
+                if m:
+                    area = m.group(1)
+            if not plot:
+                m = re.search(r"(\d+[\.,]?\d*)\s*a\b", t)
+                if m:
+                    plot = m.group(1)
+            if not year:
+                m = re.search(r"(\d{4})\s*m\.", t)
+                if m:
+                    year = m.group(1)
+            if not rooms:
+                m = re.search(r"(\d+)\s*kamb", t)
+                if m:
+                    rooms = m.group(1)
+        return area, plot, rooms, year
+
+    def _extract_info_table(self, response: HtmlResponse) -> dict:
+        info = {}
+        for sel in [
+            "table tr",
+            "dl dt",
+            "[class*='detail'] div",
+            "[class*='info'] div",
+            "[class*='param'] div",
+        ]:
+            rows = response.css(sel)
+            if not rows:
+                continue
+            for row in rows:
+                texts = row.css("::text").getall()
+                texts = [t.strip() for t in texts if t.strip()]
+                if len(texts) >= 2:
+                    key = texts[0].rstrip(":").lower()
+                    value = texts[-1]
+                    if key and value and key != value.lower():
+                        info[key] = value
+            if info:
+                break
+
+        body_text = response.text
+        for pattern, key in [
+            (r"Namo tipas[:\s]+([^\n<]+)", "namo tipas"),
+            (r"Šildymas[:\s]+([^\n<]+)", "šildymas"),
+            (r"Aukštai[:\s]+(\d+)", "aukštai"),
+            (r"Energijos klasė[:\s]+([A-G]\+*)", "energijos klasė"),
+        ]:
+            m = re.search(pattern, body_text, re.IGNORECASE)
+            if m and key not in info:
+                info[key] = m.group(1).strip()
+
+        return info
+
+    def _extract_address(self, title: str, response: HtmlResponse) -> str:
+        if title:
+            parts = re.split(r"\b(?:namas|butas|kotedžas|sodyba|namo dalis)\b", title, flags=re.I)
+            if len(parts) > 1:
+                addr = parts[-1].strip().strip(",").strip()
+                if addr:
+                    return addr
+
+        breadcrumbs = response.css(
+            "nav a::text, [class*='breadcrumb'] a::text, "
+            "[class*='path'] a::text"
+        ).getall()
+        breadcrumbs = [b.strip() for b in breadcrumbs if b.strip() and b.strip() != "Pradžia"]
+        if breadcrumbs:
+            return ", ".join(breadcrumbs[-3:])
+
+        if title:
+            return title
+
+        return ""
+
+    def _extract_city(self, title: str, address: str) -> str:
+        text = f"{title} {address}".lower()
+        cities = [
+            "Vilnius", "Kaunas", "Klaipėda", "Šiauliai", "Panevėžys",
+            "Kretinga", "Palanga", "Alytus", "Marijampolė", "Mažeikiai",
+            "Jonava", "Utena", "Kėdainiai", "Telšiai", "Tauragė",
+            "Ukmergė", "Visaginas", "Plungė", "Raseiniai", "Biržai",
+        ]
+        for city in cities:
+            if city.lower() in text:
+                return city
+        sav_match = re.search(r"(\w+)\s*(?:rajono|r\.)\s*sav", text)
+        if sav_match:
+            return sav_match.group(1).capitalize()
+        return ""
+
+    def _extract_description(
+        self, response: HtmlResponse, all_text: list[str]
+    ) -> str:
+        for sel in [
+            "[class*='description']::text",
+            "[class*='comment']::text",
+            "[class*='aprasymas']::text",
+            "p::text",
+        ]:
+            texts = response.css(sel).getall()
+            desc = " ".join(t.strip() for t in texts if len(t.strip()) > 30)
+            if desc:
+                return desc[:2000]
+
+        for t in all_text:
+            if len(t) > 50 and not re.match(r"^\d", t):
+                return t[:2000]
+        return ""
 
     def _get_field(self, info: dict, keys: list[str]) -> str:
         for key in keys:
