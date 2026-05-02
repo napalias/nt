@@ -41,15 +41,12 @@ services:
       NOMINATIM_PASSWORD: nominatim
       IMPORT_WIKIPEDIA: "false"
       THREADS: 2
+      OSMPGSQL_CACHE: 2048
     ports:
       - "7070:8080"
     volumes:
       - nominatim_data:/var/lib/postgresql/14/main
     shm_size: 2gb
-    deploy:
-      resources:
-        limits:
-          memory: 4g
 
   backend:
     build:
