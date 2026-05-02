@@ -277,3 +277,25 @@ export interface PlanningResult {
 export async function fetchPlanning(bbox: string): Promise<PlanningResult[]> {
 	return fetchJson<PlanningResult[]>(`/api/planning?bbox=${bbox}`);
 }
+
+// --- Property report ---
+
+export interface PropertyReport {
+	cadastral_number: string;
+	plot: {
+		area_sqm: number;
+		purpose: string;
+		purpose_category: string;
+		municipality: string;
+	} | null;
+	listings: ListingResult[];
+	permits: PermitResult[];
+	planning: PlanningResult[];
+	heritage: { name: string; category: string; protection_level: string }[];
+	restrictions: { category: string; description: string }[];
+	developers: DeveloperResult[];
+}
+
+export async function getPropertyReport(cadastralNumber: string): Promise<PropertyReport> {
+	return fetchJson<PropertyReport>(`/api/property/${encodeURIComponent(cadastralNumber)}`);
+}

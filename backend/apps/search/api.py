@@ -14,7 +14,11 @@ from django.shortcuts import get_object_or_404
 from django_ratelimit.core import is_ratelimited
 from ninja import Query, Router, Schema
 
+from apps.cadastre.models import CadastralPlot, HeritageObject, SpecialLandUseCondition
+from apps.developers.models import Developer
 from apps.listings.models import Listing
+from apps.permits.models import BuildingPermit
+from apps.planning.models import PlanningDocument
 from apps.search.models import SavedSearch
 
 logger = logging.getLogger(__name__)
@@ -283,4 +287,323 @@ def _listing_to_out(listing: Listing) -> dict:
         "lng": listing.location.x,
         "photo_urls": listing.photo_urls or [],
         "distance_m": round(listing.distance.m, 1),
+    }
+
+
+def _listing_to_out_simple(listing: Listing) -> dict:
+    """Listing serializer for contexts where distance annotation is not available."""
+    return {
+        "id": listing.id,
+        "source": listing.source,
+        "source_url": listing.source_url,
+        "title": listing.title,
+        "property_type": listing.property_type,
+        "listing_type": listing.listing_type,
+        "price": float(listing.price) if listing.price else None,
+        "price_per_sqm": float(listing.price_per_sqm) if listing.price_per_sqm else None,
+        "currency": listing.currency,
+        "area_sqm": float(listing.area_sqm) if listing.area_sqm else None,
+        "plot_area_ares": float(listing.plot_area_ares) if listing.plot_area_ares else None,
+        "rooms": listing.rooms,
+        "floor": listing.floor,
+        "total_floors": listing.total_floors,
+        "year_built": listing.year_built,
+        "building_type": listing.building_type,
+        "is_new_construction": listing.is_new_construction,
+        "address_raw": listing.address_raw,
+        "city": listing.city,
+        "district": listing.district,
+        "lat": listing.location.y,
+        "lng": listing.location.x,
+        "photo_urls": listing.photo_urls or [],
+    }
+
+
+# --- Multi-layer full search ---
+
+
+MAX_FULL_RESULTS_PER_LAYER = 200
+
+PROPERTY_REPORT_NEARBY_M = 100
+
+
+class FullSearchParams(Schema):
+    lat: float
+    lng: float
+    radius_m: int = settings.DEFAULT_SEARCH_RADIUS_M
+
+
+class PermitSummaryOut(Schema):
+    id: int
+    permit_number: str
+    applicant_name: str
+    status: str
+    issued_at: str | None
+    building_purpose: str
+    project_type: str
+    lat: float | None
+    lng: float | None
+    source_url: str
+
+
+class DeveloperSummaryOut(Schema):
+    id: int
+    name: str
+    company_code: str
+    active_permits_count: int
+    registered_point: list[float] | None
+
+
+class PlanningSummaryOut(Schema):
+    id: int
+    title: str
+    doc_type: str
+    status: str
+    max_floors: int | None
+    allowed_uses: list
+    source_url: str
+
+
+class HeritageOut(Schema):
+    type: str = "heritage_zone"
+    kvr_code: str
+    name: str
+    protection_level: str
+
+
+class SpecialLandUseOut(Schema):
+    type: str = "special_land_use"
+    category: str
+    description: str
+
+
+class RestrictionsOut(Schema):
+    heritage: list[HeritageOut]
+    special_land_use: list[SpecialLandUseOut]
+
+
+class FullSearchResponse(Schema):
+    center: dict
+    radius_m: int
+    listings: list[dict]
+    permits: list[PermitSummaryOut]
+    developers: list[DeveloperSummaryOut]
+    planning: list[PlanningSummaryOut]
+    restrictions: RestrictionsOut
+
+
+@router.get("/search/full", response=FullSearchResponse)
+@ratelimit(rate="60/m", key="ip")
+def search_full(request, params: Query[FullSearchParams]):
+    """Multi-layer search: returns listings, permits, developers, planning docs,
+    and restrictions within a radius of a point."""
+    center = Point(params.lng, params.lat, srid=4326)
+    radius_m = min(params.radius_m, MAX_RADIUS_M)
+
+    # Listings
+    listings_qs = (
+        Listing.objects.filter(
+            is_active=True,
+            location__dwithin=(center, D(m=radius_m)),
+        )
+        .annotate(distance=Distance("location", center))
+        .order_by("distance")[:MAX_FULL_RESULTS_PER_LAYER]
+    )
+
+    # Permits
+    permits_qs = BuildingPermit.objects.filter(
+        location__dwithin=(center, D(m=radius_m)),
+    ).order_by("-issued_at")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Developers (by registered office)
+    developers_qs = Developer.objects.filter(
+        registered_address_point__dwithin=(center, D(m=radius_m)),
+    ).order_by("name")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Planning documents (boundary intersects search circle)
+    planning_qs = PlanningDocument.objects.filter(
+        boundary__dwithin=(center, D(m=radius_m)),
+    ).order_by("-approved_at")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Restrictions - heritage
+    heritage_qs = HeritageObject.objects.filter(
+        geometry__dwithin=(center, D(m=radius_m)),
+    )[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Restrictions - special land use
+    slu_qs = SpecialLandUseCondition.objects.filter(
+        geometry__dwithin=(center, D(m=radius_m)),
+    )[:MAX_FULL_RESULTS_PER_LAYER]
+
+    return {
+        "center": {"lat": params.lat, "lng": params.lng},
+        "radius_m": radius_m,
+        "listings": [_listing_to_out(listing) for listing in listings_qs],
+        "permits": [_permit_summary(p) for p in permits_qs],
+        "developers": [_developer_summary(d) for d in developers_qs],
+        "planning": [_planning_summary(doc) for doc in planning_qs],
+        "restrictions": {
+            "heritage": [_heritage_out(h) for h in heritage_qs],
+            "special_land_use": [_slu_out(s) for s in slu_qs],
+        },
+    }
+
+
+# --- Property report ---
+
+
+class CadastralPlotOut(Schema):
+    id: int
+    cadastral_number: str
+    area_sqm: float
+    purpose: str
+    purpose_category: str
+    municipality: str
+
+
+class PropertyReportResponse(Schema):
+    plot: CadastralPlotOut | None
+    listings: list[dict]
+    permits: list[PermitSummaryOut]
+    planning: list[PlanningSummaryOut]
+    developers: list[DeveloperSummaryOut]
+    restrictions: RestrictionsOut
+
+
+class PropertyReportErrorOut(Schema):
+    detail: str
+
+
+@router.get(
+    "/property/{path:cadastral_number}",
+    response=PropertyReportResponse,
+)
+@ratelimit(rate="60/m", key="ip")
+def property_report(request, cadastral_number: str):
+    """Assemble everything we know about a single cadastral plot."""
+    plot = get_object_or_404(CadastralPlot, cadastral_number=cadastral_number)
+
+    plot_geom = plot.geometry
+
+    # Listings within 100m of the plot centroid
+    centroid = plot_geom.centroid
+    nearby_listings = Listing.objects.filter(
+        is_active=True,
+        location__dwithin=(centroid, D(m=PROPERTY_REPORT_NEARBY_M)),
+    ).order_by("-scraped_at")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Permits matching the cadastral number
+    permits = BuildingPermit.objects.filter(
+        cadastral_number=cadastral_number,
+    ).order_by("-issued_at")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Planning documents whose boundary intersects the plot geometry
+    planning = PlanningDocument.objects.filter(
+        boundary__intersects=plot_geom,
+    ).order_by("-approved_at")[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Heritage objects intersecting the plot
+    heritage = HeritageObject.objects.filter(
+        geometry__intersects=plot_geom,
+    )[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Special land use conditions intersecting the plot
+    slu = SpecialLandUseCondition.objects.filter(
+        geometry__intersects=plot_geom,
+    )[:MAX_FULL_RESULTS_PER_LAYER]
+
+    # Developers with permits on this plot
+    developer_ids = (
+        BuildingPermit.objects.filter(cadastral_number=cadastral_number)
+        .exclude(applicant__isnull=True)
+        .values_list("applicant_id", flat=True)
+        .distinct()
+    )
+    developers = Developer.objects.filter(id__in=developer_ids)
+
+    return 200, {
+        "plot": _cadastral_plot_out(plot),
+        "listings": [_listing_to_out_simple(listing) for listing in nearby_listings],
+        "permits": [_permit_summary(p) for p in permits],
+        "planning": [_planning_summary(doc) for doc in planning],
+        "developers": [_developer_summary(d) for d in developers],
+        "restrictions": {
+            "heritage": [_heritage_out(h) for h in heritage],
+            "special_land_use": [_slu_out(s) for s in slu],
+        },
+    }
+
+
+# --- Serialization helpers ---
+
+
+def _permit_summary(permit: BuildingPermit) -> dict:
+    return {
+        "id": permit.id,
+        "permit_number": permit.permit_number,
+        "applicant_name": permit.applicant_name,
+        "status": permit.status,
+        "issued_at": permit.issued_at.isoformat() if permit.issued_at else None,
+        "building_purpose": permit.building_purpose,
+        "project_type": permit.project_type,
+        "lat": permit.location.y if permit.location else None,
+        "lng": permit.location.x if permit.location else None,
+        "source_url": permit.source_url,
+    }
+
+
+def _developer_summary(dev: Developer) -> dict:
+    active_count = BuildingPermit.objects.filter(
+        applicant=dev, status__in=["issued", "in_progress"]
+    ).count()
+    return {
+        "id": dev.id,
+        "name": dev.name,
+        "company_code": dev.company_code,
+        "active_permits_count": active_count,
+        "registered_point": (
+            [dev.registered_address_point.y, dev.registered_address_point.x]
+            if dev.registered_address_point
+            else None
+        ),
+    }
+
+
+def _planning_summary(doc: PlanningDocument) -> dict:
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "doc_type": doc.doc_type,
+        "status": doc.status,
+        "max_floors": doc.max_floors,
+        "allowed_uses": doc.allowed_uses or [],
+        "source_url": doc.source_url,
+    }
+
+
+def _heritage_out(obj: HeritageObject) -> dict:
+    return {
+        "type": "heritage_zone",
+        "kvr_code": obj.kvr_code,
+        "name": obj.name,
+        "protection_level": obj.protection_level,
+    }
+
+
+def _slu_out(cond: SpecialLandUseCondition) -> dict:
+    return {
+        "type": "special_land_use",
+        "category": cond.category,
+        "description": cond.description,
+    }
+
+
+def _cadastral_plot_out(plot: CadastralPlot) -> dict:
+    return {
+        "id": plot.id,
+        "cadastral_number": plot.cadastral_number,
+        "area_sqm": plot.area_sqm,
+        "purpose": plot.purpose,
+        "purpose_category": plot.purpose_category,
+        "municipality": plot.municipality,
     }
