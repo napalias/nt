@@ -1,48 +1,121 @@
-# Real Estate Aggregator
+# NT Paieška — Real Estate Research for Lithuania
 
-Local-first real estate aggregator for Lithuania. Scrapes multiple sources, lets you search by address with a 5 km radius.
+Property research tool that combines listings from multiple portals with government data (permits, planning, cadastre, restrictions) and AI evaluation on a single map. Built for house hunting in the Kretinga area.
 
-**Read `CLAUDE.md` first** if you're using Claude Code. **Read `BUILD_PLAN.md`** for the phased build sequence.
+## What it does
+
+Search any address in Lithuania → see within 5 km:
+- **Listings** from Domoplius, Aruodas, Skelbiu (scraped daily)
+- **Building permits** from Infostatyba
+- **Territorial plans** from TPDRIS with AI-extracted facts (max floors, allowed uses)
+- **Cadastral plots** from GeoPortal + Kretinga local GIS
+- **Heritage zones** and special land use restrictions
+- **Developers** from JAR open data
+
+AI features:
+- Each listing classified against your criteria (match/review/skip)
+- Like/dislike feedback → system learns your preferences
+- Cross-portal duplicate detection
+- Marketing fluff cleaned from descriptions
+- LLM extraction of planning document facts
 
 ## Quick start
 
 ```bash
-# 1. Copy env
 cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
 
-# 2. Pull base images (one time, ~2 GB)
-docker compose pull
-
-# 3. Bring up the stack
 docker compose up -d
+# Wait ~5 min for Nominatim first boot: docker compose logs -f nominatim
 
-# 4. Wait for Nominatim to finish indexing Lithuania (5–10 min on first boot)
-docker compose logs -f nominatim
-# Look for: "Done." then ctrl-C
+# Seed test data
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py seed_listings 20
+
+# Open http://localhost:5173
 ```
 
-After Phase 0 of the build plan completes, you'll have:
+## URLs
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000/api
-- Backend admin: http://localhost:8000/admin
-- OpenAPI docs: http://localhost:8000/api/docs
-- Nominatim geocoder: http://localhost:7070
-- MailHog UI: http://localhost:8025
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000/api |
+| API docs | http://localhost:8000/api/docs |
+| Admin | http://localhost:8000/admin |
+| MailHog | http://localhost:8025 |
 
-## Reset everything
+## Run spiders
 
 ```bash
-docker compose down -v   # nukes volumes — Nominatim will re-download on next up
+docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=2
+docker compose run --rm scrapers scrapy crawl skelbiu -a max_pages=2
+docker compose run --rm scrapers scrapy crawl aruodas -a max_pages=1
+docker compose run --rm scrapers scrapy crawl infostatyba -a max_pages=5
+docker compose run --rm scrapers scrapy crawl tpdris -a max_pages=5
 ```
 
-## Run a scraper
+## AI classification
 
 ```bash
-docker compose run --rm scrapers scrapy crawl domoplius
-docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=2  # debug
+# Classify all unclassified listings
+curl -X POST http://localhost:8000/api/classifier/classify/batch \
+  -H 'Content-Type: application/json' -d '{"limit": 50}'
+
+# Give feedback
+curl -X POST http://localhost:8000/api/classifier/feedback/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"feedback_type": "like", "reason": "didelis sklypas, geoterminis sildymas"}'
+
+# View learned preferences
+curl http://localhost:8000/api/classifier/preferences
 ```
 
-## Why this stack
+## Stack
 
-See `CLAUDE.md` and `BUILD_PLAN.md`. tl;dr: Scrapy + GeoDjango are best-in-class for scraping + geographic queries. SvelteKit on the frontend. Everything runs locally in Docker.
+| Layer | Choice |
+|-------|--------|
+| Scraping | Scrapy + scrapy-playwright + curl_cffi |
+| Backend | Django 5 + GeoDjango + Django Ninja |
+| Database | PostgreSQL 16 + PostGIS 3.4 |
+| AI | Claude API (Sonnet for classification, Haiku for dedup/cleanup) |
+| Frontend | SvelteKit (Svelte 5) + MapLibre GL + Tailwind |
+| Scheduling | Celery + Redis + django-celery-beat |
+| Geocoding | Nominatim (Lithuania extract) |
+
+## Project structure
+
+```
+backend/apps/
+├── listings/     # Listing model, admin, search, seed command
+├── search/       # Search API, geocode, saved searches
+├── classifier/   # AI classification, feedback, dedup, cleanup
+├── cadastre/     # GeoPortal WFS + Kretinga ArcGIS integration
+├── developers/   # JAR open data import
+├── permits/      # Infostatyba building permits
+├── planning/     # TPDRIS territorial planning + LLM extraction
+├── documents/    # PDF storage for planning docs
+└── geo/          # Geocoding utilities
+
+scrapers/realestate_spiders/spiders/
+├── listings/domoplius.py
+├── listings/skelbiu.py
+├── listings/aruodas.py
+├── infostatyba.py
+└── tpdris.py
+
+frontend/src/routes/
+├── +page.svelte          # Dashboard
+├── search/+page.svelte   # Map + listings + filters
+├── preferences/          # AI learned preferences
+├── searches/             # Saved searches
+└── property/[id]/        # Property report
+```
+
+## Production
+
+```bash
+docker compose -f docker-compose.yml -f prod.yml up -d
+```
+
+See `CLAUDE.md` for full conventions and `BUILD_PLAN.md` for the build sequence.
