@@ -264,13 +264,20 @@ The build process updates itself. After each task, the loom checks:
 
 ### Decision policy
 
-The build loop runs autonomously. It only asks the user about:
+The build loop runs **fully autonomously** across phases. Do NOT ask the user for confirmation to move to the next phase — just proceed. The only things that require user input:
 - Data model design (fields, relationships)
-- API contracts (endpoints, response shapes)
 - Ambiguous BUILD_PLAN.md requirements
 - Trade-offs between valid approaches
-- Anything that crosses phase boundaries
+
+### Commit policy
+
+**Commit after every completed phase.** After all tests pass and lint is clean for a phase:
+1. Stage all changed files
+2. Create a descriptive commit (what was built, not just "phase X")
+3. Then immediately continue to the next phase
+
+Never wait for user confirmation to commit or to start the next phase.
 
 ## When in doubt
 
-Read `BUILD_PLAN.md` for the current phase's scope. Don't pull work from a later phase into the current one.
+Read `BUILD_PLAN.md` for the current phase's scope.
