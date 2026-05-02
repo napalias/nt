@@ -47,6 +47,9 @@ class ListingItem(scrapy.Item):
     raw_data = scrapy.Field()
     scraped_at = scrapy.Field()
 
+    # Pipeline-internal (set by NormalizePipeline)
+    _content_hash = scrapy.Field()
+
 
 class PermitItem(scrapy.Item):
     """A building permit scraped from Infostatyba / planuojustatyti.lt."""

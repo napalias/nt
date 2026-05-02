@@ -125,15 +125,26 @@ class GeocodePipeline:
     def __init__(self):
         self.nominatim_url = getattr(settings, "NOMINATIM_URL", "http://nominatim:8080")
 
+    JUNK_WORDS = {
+        "namai", "kotedžai", "butai", "sklypai", "sodai",
+        "pardavimui", "nuomai", "pardavimas", "nuoma",
+        "komercinis", "garažai", "patalpos",
+    }
+
+    def _clean_address(self, address: str) -> str:
+        parts = [p.strip() for p in address.split(",")]
+        clean = [p for p in parts if p.lower() not in self.JUNK_WORDS]
+        return ", ".join(clean)
+
     def process_item(self, item: ListingItem, spider: Spider) -> ListingItem:
         if not isinstance(item, ListingItem):
             return item
         if item.get("latitude") and item.get("longitude"):
             return item
 
-        address = item.get("address", "")
+        address = self._clean_address(item.get("address", ""))
         city = item.get("city", "")
-        query = f"{address}, {city}" if city else address
+        query = f"{address}, {city}" if city and city.lower() not in address.lower() else address
 
         if not query.strip():
             raise DropItem(f"No address to geocode: {item.get('url')}")
