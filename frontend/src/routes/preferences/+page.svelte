@@ -13,7 +13,7 @@
 		try {
 			preferences = await getPreferences();
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Nepavyko uzkrauti prioritetu';
+			loadError = e instanceof Error ? e.message : 'Nepavyko užkrauti prioritetų';
 			preferences = [];
 		} finally {
 			loading = false;
@@ -26,7 +26,7 @@
 			await deletePreference(id);
 			preferences = preferences.filter((p) => p.id !== id);
 		} catch {
-			removeError = 'Nepavyko pasalinti prioriteto. Bandykite dar karta.';
+			removeError = 'Nepavyko pašalinti prioriteto. Bandykite dar kartą.';
 		}
 	}
 

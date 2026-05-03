@@ -5,7 +5,7 @@ You ARE the AI evaluator. Read unclassified listings from the database, evaluate
 ## Buyer's criteria (from memory + CLAUDE.md)
 
 - **Budget**: Target ~200,000 EUR, max 250,000 EUR
-- **Type**: New build preferred (naujos statybos), but all construction types OK
+- **Type**: New build preferred. "Namo dalis" (part of house) = always skip
 - **Living area**: 100 kv.m preferred, acceptable 95–120 kv.m
 - **Plot size**: 10 arų preferred, acceptable 8–12 arų
 - **Location**: Kretinga city, Dupulčiai, Klonaičiai, Jakubavai, Jokūbavas, Raguviškiai, Kartena, Kiauleikiai, Girkaliai, Vydmantai

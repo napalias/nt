@@ -105,14 +105,14 @@
 </script>
 
 <svelte:head>
-	<title>Kretinga Finder — NT Paieška</title>
+	<title>Kretinga Atranka — NT Paieška</title>
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
 	<div class="mx-auto max-w-3xl px-4 py-8">
 		<!-- Header -->
 		<div class="mb-6 text-center">
-			<h1 class="text-2xl font-bold text-gray-900">Kretinga Finder</h1>
+			<h1 class="text-2xl font-bold text-gray-900">Kretinga Atranka</h1>
 			<p class="mt-1 text-sm text-gray-500">
 				AI atrinkti skelbimai pagal jūsų kriterijus ir prioritetus
 			</p>

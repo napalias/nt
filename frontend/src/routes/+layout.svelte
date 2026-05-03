@@ -7,7 +7,7 @@
 
     const navLinks = [
         { href: '/', label: 'Pradžia' },
-        { href: '/finder', label: 'Finder' },
+        { href: '/finder', label: 'Atranka' },
         { href: '/search', label: 'Paieška' },
         { href: '/searches', label: 'Paieškos' },
         { href: '/preferences', label: 'Prioritetai' }

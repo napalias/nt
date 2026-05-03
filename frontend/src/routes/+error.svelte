@@ -18,7 +18,7 @@
 			{:else if $page.status === 403}
 				Prieiga uždrausta
 			{:else}
-				Ivyko klaida
+				Įvyko klaida
 			{/if}
 		</h1>
 
@@ -28,7 +28,7 @@
 			{:else if $page.error?.message}
 				{$page.error.message}
 			{:else}
-				Pabandykite atnaujinti puslapi arba grižti i pradzia.
+				Pabandykite atnaujinti puslapį arba grįžti į pradžią.
 			{/if}
 		</p>
 
@@ -37,13 +37,13 @@
 				href="/"
 				class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
 			>
-				Pradzia
+				Pradžia
 			</a>
 			<button
 				onclick={() => window.location.reload()}
 				class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
 			>
-				Bandyti dar karta
+				Bandyti dar kartą
 			</button>
 		</div>
 	</div>

@@ -47,7 +47,7 @@
 				skips: allEvals.filter((e) => e.verdict === 'skip').length
 			};
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Nepavyko uzkrauti duomenu';
+			loadError = e instanceof Error ? e.message : 'Nepavyko užkrauti duomenų';
 		} finally {
 			loading = false;
 		}

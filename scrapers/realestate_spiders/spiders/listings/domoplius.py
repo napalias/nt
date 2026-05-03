@@ -154,9 +154,13 @@ class DomopliusSpider(scrapy.Spider):
         # Fallback: extract from description if structured parsing missed them
         desc_lower = (description or "").lower()
         if not area:
-            m = re.search(r"(\d+[\.,]?\d*)\s*(?:kv\.?\s*m|m²|m2|kv)", desc_lower)
-            if m:
-                area = m.group(1).replace(",", ".")
+            desc_areas = [
+                float(m.group(1).replace(",", "."))
+                for m in re.finditer(r"(\d+[\.,]?\d*)\s*(?:kv\.?\s*m|m²|m2)", desc_lower)
+            ]
+            desc_areas = [a for a in desc_areas if 10 < a < 1000]
+            if desc_areas:
+                area = str(max(desc_areas))
         if not plot_area:
             m = re.search(r"(\d+[\.,]?\d*)\s*(?:a\b|arų|arai|aru)", desc_lower)
             if m:
@@ -273,11 +277,13 @@ class DomopliusSpider(scrapy.Spider):
         self, texts: list[str]
     ) -> tuple[str, str, str, str]:
         area = plot = rooms = year = ""
+        all_areas: list[float] = []
         for t in texts:
-            if not area:
-                m = re.search(r"(\d+[\.,]?\d*)\s*m²", t)
-                if m:
-                    area = m.group(1)
+            for m in re.finditer(r"(\d+[\.,]?\d*)\s*(?:kv\.?\s*m|m²|m2)", t):
+                try:
+                    all_areas.append(float(m.group(1).replace(",", ".")))
+                except ValueError:
+                    pass
             if not plot:
                 m = re.search(r"(\d+[\.,]?\d*)\s*a\b", t)
                 if m:
@@ -290,6 +296,9 @@ class DomopliusSpider(scrapy.Spider):
                 m = re.search(r"(\d+)\s*kamb", t)
                 if m:
                     rooms = m.group(1)
+        if all_areas:
+            main_area = max(a for a in all_areas if a < 1000)
+            area = str(main_area)
         return area, plot, rooms, year
 
     def _extract_info_table(self, response: HtmlResponse) -> dict:

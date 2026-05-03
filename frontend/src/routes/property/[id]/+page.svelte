@@ -36,7 +36,7 @@
 <div class="min-h-screen bg-gray-50">
 	<div class="mx-auto max-w-4xl px-4 py-4">
 		<nav class="flex items-center gap-2 text-sm text-gray-400">
-			<a href="/" class="hover:text-gray-600">Pradzia</a>
+			<a href="/" class="hover:text-gray-600">Pradžia</a>
 			<span>/</span>
 			<span class="text-gray-700">Sklypas {cadastralNumber}</span>
 		</nav>
@@ -228,7 +228,7 @@
 
 			<!-- Data source citations -->
 			<footer class="mt-8 rounded-lg border border-gray-200 bg-gray-50 px-6 py-4">
-				<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Saltiniai</h3>
+				<h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Šaltiniai</h3>
 				<div class="mt-2 space-y-1 text-xs text-gray-500">
 					{#if report.plot}
 						<p>
@@ -242,22 +242,22 @@
 					{/if}
 					{#if report.planning.length > 0}
 						<p>
-							<span class="font-medium text-gray-600">TPDRIS</span> — teritoriju planavimo dokumentai
+							<span class="font-medium text-gray-600">TPDRIS</span> — teritorijų planavimo dokumentai
 						</p>
 					{/if}
 					{#if report.heritage.length > 0}
 						<p>
-							<span class="font-medium text-gray-600">Kulturos vertybiu registras</span> — paveldo zonos
+							<span class="font-medium text-gray-600">Kultūros vertybių registras</span> — paveldo zonos
 						</p>
 					{/if}
 					{#if report.restrictions.length > 0}
 						<p>
-							<span class="font-medium text-gray-600">GeoPortal SZNS</span> — specialiosios salygos
+							<span class="font-medium text-gray-600">GeoPortal SŽNS</span> — specialiosios sąlygos
 						</p>
 					{/if}
 					{#if report.developers.length > 0}
 						<p>
-							<span class="font-medium text-gray-600">JAR</span> — juridiniai asmenu registras
+							<span class="font-medium text-gray-600">JAR</span> — juridinių asmenų registras
 						</p>
 					{/if}
 					{#if report.listings.length > 0}
@@ -267,7 +267,7 @@
 					{/if}
 				</div>
 				<p class="mt-3 text-[10px] text-gray-400">
-					Duomenys renkami automatiskai ir gali buti netikslu. Visada patikrinkite pirminius saltinius.
+					Duomenys renkami automatiškai ir gali būti netikslūs. Visada patikrinkite pirminius šaltinius.
 				</p>
 			</footer>
 		{/if}

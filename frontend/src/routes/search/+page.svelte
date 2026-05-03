@@ -187,13 +187,12 @@
 	const emptyGeoJson: GeoJsonCollection = { type: 'FeatureCollection', features: [] };
 
 	let layerConfigs = $state([
-		{ id: 'cadastre', label: 'Kadastras', color: '#8b5cf6', count: 0, enabled: false },
+		{ id: 'kretinga/plots', label: 'Sklypai', color: '#8b5cf6', count: 0, enabled: false },
+		{ id: 'kretinga/zoning', label: 'Zonos', color: '#6366f1', count: 0, enabled: false },
+		{ id: 'kretinga/utilities', label: 'Tinklai', color: '#84cc16', count: 0, enabled: false },
+		{ id: 'cadastre', label: 'Kadastras (GeoPortal)', color: '#a855f7', count: 0, enabled: false },
 		{ id: 'heritage', label: 'Paveldas', color: '#ef4444', count: 0, enabled: false },
 		{ id: 'restrictions', label: 'Apribojimai', color: '#f97316', count: 0, enabled: false },
-		{ id: 'permits', label: 'Leidimai', color: '#0ea5e9', count: 0, enabled: false },
-		{ id: 'planning', label: 'Planai', color: '#10b981', count: 0, enabled: false },
-		{ id: 'kretinga/zoning', label: 'Kretinga zonos', color: '#6366f1', count: 0, enabled: false },
-		{ id: 'kretinga/utilities', label: 'Kretinga tinklai', color: '#84cc16', count: 0, enabled: false }
 	]);
 
 	let geoJsonLayers = $state<
@@ -266,7 +265,7 @@
 				restrictions: resp.restrictions.special_land_use.length
 			};
 		} catch {
-			fullSearchError = 'Nepavyko gauti duomenu';
+			fullSearchError = 'Nepavyko gauti duomenų';
 		} finally {
 			fullSearchLoading = false;
 		}

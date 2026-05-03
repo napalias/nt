@@ -162,7 +162,7 @@
 					target="_blank"
 					rel="noopener noreferrer"
 					onclick={(e) => e.stopPropagation()}
-					title="Atidaryti originale"
+					title="Atidaryti originalą"
 					class="rounded p-0.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-600"
 				>
 					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

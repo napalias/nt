@@ -13,7 +13,7 @@
 		try {
 			searches = await getSavedSearches();
 		} catch (e) {
-			loadError = e instanceof Error ? e.message : 'Nepavyko uzkrauti paiešku';
+			loadError = e instanceof Error ? e.message : 'Nepavyko užkrauti paieškų';
 			searches = [];
 		} finally {
 			loading = false;
@@ -26,7 +26,7 @@
 			await deleteSavedSearch(id);
 			searches = searches.filter((s) => s.id !== id);
 		} catch {
-			removeError = 'Nepavyko pasalinti paieskos. Bandykite dar karta.';
+			removeError = 'Nepavyko pašalinti paieškos. Bandykite dar kartą.';
 		}
 	}
 
