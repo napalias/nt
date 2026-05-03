@@ -143,6 +143,25 @@ class DomopliusSpider(scrapy.Spider):
 
         description = self._extract_description(response, all_text)
 
+        # Fallback: extract from description if structured parsing missed them
+        desc_lower = (description or "").lower()
+        if not area:
+            m = re.search(r"(\d+[\.,]?\d*)\s*(?:kv\.?\s*m|m²|m2|kv)", desc_lower)
+            if m:
+                area = m.group(1).replace(",", ".")
+        if not plot_area:
+            m = re.search(r"(\d+[\.,]?\d*)\s*(?:a\b|arų|arai|aru)", desc_lower)
+            if m:
+                plot_area = m.group(1).replace(",", ".")
+        if not rooms:
+            m = re.search(r"(\d+)\s*(?:kamb|room)", desc_lower)
+            if m:
+                rooms = m.group(1)
+        if not year_built:
+            m = re.search(r"(\d{4})\s*(?:m\.|met)", desc_lower)
+            if m:
+                year_built = m.group(1)
+
         photos = response.css("img[src*='domoplius']::attr(src)").getall()
         photos += response.css("img[data-src*='domoplius']::attr(data-src)").getall()
         photos += response.css("[style*='domoplius']").re(r'url\(["\']?(https://[^"\']+)["\']?\)')
@@ -161,9 +180,14 @@ class DomopliusSpider(scrapy.Spider):
         floor_text = self._get_field(info_table, ["aukštai", "aukštas", "floor"])
         floor_val, total_floors_val = self._parse_floor(floor_text)
 
+        combined = (title + " " + description).lower()
         is_new = any(
-            kw in (title + " " + description).lower()
-            for kw in ["naujos statybos", "naujas namas", "nauja statyba"]
+            kw in combined
+            for kw in [
+                "naujos statybos", "naujas namas", "nauja statyba",
+                "naujai pastatytas", "naujai statomas", "naujas kotedžas",
+                "naujas projektas", "2024 m.", "2025 m.", "2026 m.",
+            ]
         )
 
         source_id_match = re.search(r"-(\d+)\.html", response.url)
