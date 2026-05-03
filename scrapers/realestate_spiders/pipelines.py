@@ -164,6 +164,28 @@ class GeocodePipeline:
         "gargzdai": (55.7125, 21.3917),
         "kartena": (55.9275, 21.4900),
         "skuodas": (56.2686, 21.5300),
+        # Kretinga district villages
+        "kiauleikiai": (55.8700, 21.2000),
+        "jokūbavas": (55.8950, 21.2600),
+        "jokubavas": (55.8950, 21.2600),
+        "rūdaičiai": (55.9100, 21.2900),
+        "rudaiciai": (55.9100, 21.2900),
+        "girkaliai": (55.8500, 21.1800),
+        "jakubavai": (55.8700, 21.1900),
+        "dupulčiai": (55.8820, 21.2100),
+        "dupulciai": (55.8820, 21.2100),
+        "klonaičiai": (55.8950, 21.2700),
+        "klonaiciai": (55.8950, 21.2700),
+        "raguviškiai": (55.9000, 21.2200),
+        "raguviskiai": (55.9000, 21.2200),
+        "vydmantai": (55.8600, 21.3200),
+        "darbėnai": (56.0200, 21.2200),
+        "darbenai": (56.0200, 21.2200),
+        "salantai": (56.0500, 21.5700),
+        "šventoji": (56.0250, 21.0800),
+        "sventoji": (56.0250, 21.0800),
+        "nida": (55.3100, 20.9700),
+        "neringa": (55.3600, 21.0000),
     }
 
     JUNK_WORDS = {
