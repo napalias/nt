@@ -20,19 +20,27 @@
 	import LayerPanel from '$lib/components/LayerPanel.svelte';
 	import Map from '$lib/components/Map.svelte';
 
+	let { data } = $props();
+
 	type SortMode = 'distance' | 'score' | 'price_asc' | 'price_desc';
 
-	let listings = $state<ListingResult[]>([]);
-	let evaluations = $state<Record<number, EvaluationResult>>({});
-	let count = $state(0);
+	function buildEvalMap(evals: EvaluationResult[]): Record<number, EvaluationResult> {
+		const m: Record<number, EvaluationResult> = {};
+		for (const e of evals) m[e.listing_id] = e;
+		return m;
+	}
+
+	let listings = $state<ListingResult[]>(data.searchData?.results ?? []);
+	let evaluations = $state<Record<number, EvaluationResult>>(buildEvalMap(data.evaluations ?? []));
+	let count = $state(data.searchData?.count ?? 0);
 	let loading = $state(false);
 	let error = $state('');
 	let activeId = $state<number | null>(null);
 	let selectedListing = $state<ListingResult | null>(null);
 	let sortMode = $state<SortMode>('score');
 
-	let center = $state({ lat: 55.8835, lng: 21.242 });
-	let radiusM = $state(5000);
+	let center = $state(data.center ?? { lat: 55.8835, lng: 21.242 });
+	let radiusM = $state(data.radiusM ?? 5000);
 
 	let minPrice = $state<number | undefined>(undefined);
 	let maxPrice = $state<number | undefined>(undefined);
@@ -264,10 +272,8 @@
 		}
 	}
 
-	$effect(() => {
-		readUrlParams();
-		doSearch();
-	});
+	// Data is loaded server-side via +page.server.ts
+	// doSearch() is called when filters change
 
 	const sortOptions: { value: SortMode; label: string }[] = [
 		{ value: 'score', label: 'AI balas' },

@@ -148,16 +148,21 @@
 				{:else}
 					<ul class="divide-y divide-gray-50">
 						{#each topMatches as ev}
-							<li class="flex items-center gap-3 px-4 py-2.5">
-								<span
-									class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700"
+							<li>
+								<a
+									href="/finder"
+									class="flex items-center gap-3 px-4 py-2.5 transition hover:bg-green-50"
 								>
-									{Math.round(ev.match_score * 100)}
-								</span>
-								<div class="min-w-0 flex-1">
-									<p class="truncate text-sm text-gray-900">{ev.listing_title}</p>
-									<p class="truncate text-xs text-gray-400">{ev.summary.slice(0, 80)}</p>
-								</div>
+									<span
+										class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700"
+									>
+										{Math.round(ev.match_score * 100)}
+									</span>
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm text-gray-900">{ev.listing_title}</p>
+										<p class="truncate text-xs text-gray-400">{ev.summary.slice(0, 80)}</p>
+									</div>
+								</a>
 							</li>
 						{/each}
 					</ul>
