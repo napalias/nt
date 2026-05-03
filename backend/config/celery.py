@@ -32,6 +32,12 @@ app.conf.beat_schedule = {
         "args": ["aruodas"],
         "kwargs": {"max_pages": 5},
     },
+    "scrape-alio-daily": {
+        "task": "apps.listings.tasks.run_spider",
+        "schedule": crontab(hour=8, minute=30),
+        "args": ["alio"],
+        "kwargs": {"max_pages": 5},
+    },
     "classify-new-listings": {
         "task": "apps.classifier.tasks.classify_new_listings",
         "schedule": crontab(hour=9, minute=0),
