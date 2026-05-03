@@ -6,9 +6,10 @@
     let isSearchPage = $derived($page.url.pathname === '/search');
 
     const navLinks = [
-        { href: '/', label: 'Pradzia' },
-        { href: '/search', label: 'Paieska' },
-        { href: '/searches', label: 'Issaugotos paieškos' },
+        { href: '/', label: 'Pradžia' },
+        { href: '/finder', label: 'Finder' },
+        { href: '/search', label: 'Paieška' },
+        { href: '/searches', label: 'Paieškos' },
         { href: '/preferences', label: 'Prioritetai' }
     ];
 </script>
