@@ -16,7 +16,7 @@ from ninja import Query, Router, Schema
 
 from apps.cadastre.models import CadastralPlot, HeritageObject, SpecialLandUseCondition
 from apps.developers.models import Developer
-from apps.listings.models import Listing
+from apps.listings.models import ExcludedListing, Listing
 from apps.permits.models import BuildingPermit
 from apps.planning.models import PlanningDocument
 from apps.search.models import SavedSearch
@@ -119,6 +119,7 @@ def search_listings(request, params: Query[SearchParams]):
             is_active=True,
             location__dwithin=(center, D(m=radius_m)),
         )
+        .exclude(exclusion__isnull=False)
         .annotate(distance=Distance("location", center))
         .order_by("distance")
     )
@@ -406,6 +407,7 @@ def search_full(request, params: Query[FullSearchParams]):
             is_active=True,
             location__dwithin=(center, D(m=radius_m)),
         )
+        .exclude(exclusion__isnull=False)
         .annotate(distance=Distance("location", center))
         .order_by("distance")[:MAX_FULL_RESULTS_PER_LAYER]
     )
@@ -487,10 +489,14 @@ def property_report(request, cadastral_number: str):
 
     # Listings within 100m of the plot centroid
     centroid = plot_geom.centroid
-    nearby_listings = Listing.objects.filter(
-        is_active=True,
-        location__dwithin=(centroid, D(m=PROPERTY_REPORT_NEARBY_M)),
-    ).order_by("-scraped_at")[:MAX_FULL_RESULTS_PER_LAYER]
+    nearby_listings = (
+        Listing.objects.filter(
+            is_active=True,
+            location__dwithin=(centroid, D(m=PROPERTY_REPORT_NEARBY_M)),
+        )
+        .exclude(exclusion__isnull=False)
+        .order_by("-scraped_at")[:MAX_FULL_RESULTS_PER_LAYER]
+    )
 
     # Permits matching the cadastral number
     permits = BuildingPermit.objects.filter(
@@ -607,3 +613,41 @@ def _cadastral_plot_out(plot: CadastralPlot) -> dict:
         "purpose_category": plot.purpose_category,
         "municipality": plot.municipality,
     }
+
+
+# --- Listing exclusion ---
+
+
+class ExcludeIn(Schema):
+    reason: str = ""
+
+
+class ExcludeOut(Schema):
+    listing_id: int
+    reason: str
+    excluded_at: str
+
+
+@router.post("/exclude/{listing_id}", response=ExcludeOut)
+def exclude_listing(request, listing_id: int, payload: ExcludeIn):
+    """Mark a listing as excluded so it no longer appears in search results."""
+    listing = get_object_or_404(Listing, id=listing_id)
+    exclusion, _created = ExcludedListing.objects.update_or_create(
+        listing=listing,
+        defaults={"reason": payload.reason},
+    )
+    return {
+        "listing_id": listing.id,
+        "reason": exclusion.reason,
+        "excluded_at": exclusion.excluded_at.isoformat(),
+    }
+
+
+@router.delete("/exclude/{listing_id}")
+def unexclude_listing(request, listing_id: int):
+    """Remove the exclusion from a listing so it appears in search results again."""
+    listing = get_object_or_404(Listing, id=listing_id)
+    deleted, _ = ExcludedListing.objects.filter(listing=listing).delete()
+    if not deleted:
+        return {"ok": False, "detail": "Listing was not excluded"}
+    return {"ok": True}

@@ -1,6 +1,6 @@
 from django.contrib.gis import admin as gis_admin
 
-from apps.listings.models import Listing
+from apps.listings.models import ExcludedListing, Listing
 
 
 @gis_admin.register(Listing)
@@ -92,3 +92,12 @@ class ListingAdmin(gis_admin.GISModelAdmin):
             {"fields": ("scraped_at", "first_seen_at", "last_seen_at")},
         ),
     ]
+
+
+@gis_admin.register(ExcludedListing)
+class ExcludedListingAdmin(gis_admin.ModelAdmin):
+    list_display = ["listing", "reason", "excluded_at"]
+    list_filter = ["excluded_at"]
+    search_fields = ["listing__title", "reason"]
+    readonly_fields = ["excluded_at"]
+    raw_id_fields = ["listing"]

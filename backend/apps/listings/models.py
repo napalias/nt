@@ -125,3 +125,16 @@ class Listing(models.Model):
         else:
             self.price_per_sqm = None
         super().save(*args, **kwargs)
+
+
+class ExcludedListing(models.Model):
+    listing = models.OneToOneField(Listing, on_delete=models.CASCADE, related_name="exclusion")
+    reason = models.TextField(blank=True, verbose_name="Priežastis")
+    excluded_at = models.DateTimeField(auto_now_add=True, verbose_name="Pašalinta")
+
+    class Meta:
+        verbose_name = "Pašalintas skelbimas"
+        verbose_name_plural = "Pašalinti skelbimai"
+
+    def __str__(self) -> str:
+        return f"Excluded: {self.listing}"

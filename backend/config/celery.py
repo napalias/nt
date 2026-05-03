@@ -37,6 +37,11 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=9, minute=0),
         "kwargs": {"limit": 50},
     },
+    "cleanup-descriptions": {
+        "task": "apps.classifier.tasks.cleanup_descriptions",
+        "schedule": crontab(hour=9, minute=30),
+        "kwargs": {"limit": 50},
+    },
     "dedup-nightly": {
         "task": "apps.classifier.tasks.cluster_listings",
         "schedule": crontab(hour=10, minute=0),
