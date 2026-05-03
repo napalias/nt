@@ -283,6 +283,10 @@ The build loop runs **fully autonomously** across phases. Do NOT ask the user fo
 
 Never wait for user confirmation to commit or to start the next phase.
 
+### Parallelism
+
+**Use parallel agents and worktrees wherever possible.** When two tasks are independent (e.g. backend + frontend, two different Django apps, spider + API), launch them as parallel agents. Use `isolation: "worktree"` for agents that modify the same files. This is the preferred way to work — serial execution is only for dependent tasks.
+
 ## When in doubt
 
 Read `BUILD_PLAN.md` for the current phase's scope.
