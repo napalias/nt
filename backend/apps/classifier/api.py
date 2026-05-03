@@ -223,6 +223,20 @@ def _cluster_to_out(c: ListingCluster) -> dict:
     }
 
 
+def _ensure_list(val) -> list:
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        import json
+
+        try:
+            parsed = json.loads(val)
+            return parsed if isinstance(parsed, list) else [val]
+        except (json.JSONDecodeError, TypeError):
+            return [val] if val else []
+    return []
+
+
 def _evaluation_to_out(e: ListingEvaluation) -> dict:
     return {
         "listing_id": e.listing_id,
@@ -230,9 +244,11 @@ def _evaluation_to_out(e: ListingEvaluation) -> dict:
         "verdict": e.verdict,
         "match_score": e.match_score,
         "summary": e.summary,
-        "hard_filter_results": e.hard_filter_results,
-        "quality_notes": e.quality_notes,
-        "red_flags": e.red_flags,
+        "hard_filter_results": (
+            e.hard_filter_results if isinstance(e.hard_filter_results, dict) else {}
+        ),
+        "quality_notes": _ensure_list(e.quality_notes),
+        "red_flags": _ensure_list(e.red_flags),
         "classified_at": e.classified_at.isoformat(),
         "model_used": e.model_used,
     }
