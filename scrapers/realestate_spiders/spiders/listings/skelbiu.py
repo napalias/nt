@@ -144,12 +144,23 @@ class SkelbiuSpider(scrapy.Spider):
         """Extract detail page links from the index page using multiple strategies."""
         links: list[str] = []
 
-        # Strategy 1: Links matching the typical skelbiu detail URL pattern
-        # e.g., /skelbimai/something-123456.html
+        # Strategy 1: Links under the real estate category path
         all_links = response.css("a::attr(href)").getall()
         for link in all_links:
-            if re.search(r"/skelbimai/.*-\d+\.html", link):
+            if "/nekilnojamasis-turtas/" in link and re.search(r"-\d+\.html", link):
                 links.append(link)
+
+        # Strategy 1b: Any link with RE keywords in the slug
+        if not links:
+            re_slugs = (
+                "namas", "butas", "sklypas", "kotedzas", "sodyba",
+                "namai", "butai", "sklypai",
+            )
+            for link in all_links:
+                if re.search(r"/skelbimai/.*-\d+\.html", link):
+                    slug = link.rsplit("/", 1)[-1].lower()
+                    if any(kw in slug for kw in re_slugs):
+                        links.append(link)
 
         if links:
             return links
