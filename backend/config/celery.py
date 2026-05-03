@@ -46,6 +46,11 @@ app.conf.beat_schedule = {
         "task": "apps.classifier.tasks.cluster_listings",
         "schedule": crontab(hour=10, minute=0),
     },
+    "check-listing-validity": {
+        "task": "apps.listings.tasks.check_listing_validity",
+        "schedule": crontab(hour=11, minute=0),
+        "kwargs": {"batch_size": 100},
+    },
     "notify-saved-searches": {
         "task": "apps.search.tasks.notify_saved_searches",
         "schedule": crontab(minute="*/30"),

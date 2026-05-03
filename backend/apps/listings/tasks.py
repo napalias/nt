@@ -1,12 +1,16 @@
 import logging
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
+import requests
 from celery import shared_task
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+STALE_MARKERS = ["nebepasiekiamas", "skelbimas nerastas", "pašalintas iš sąrašo"]
 
 BACKUP_DIR = Path("/app/backups")
 
@@ -103,3 +107,49 @@ def nightly_db_backup() -> dict:
     except Exception as exc:
         logger.exception("Database backup failed with unexpected error")
         return {"status": "error", "message": str(exc)}
+
+
+@shared_task
+def check_listing_validity(batch_size: int = 50) -> dict:
+    """Check if active listings are still available on their source sites.
+
+    Makes GET requests to each listing's source_url. If the response is 404/410
+    or the page body contains Lithuanian "unavailable" markers, the listing is
+    marked as is_active=False.
+
+    Processes the oldest-seen listings first so the whole table is checked over
+    successive runs.
+    """
+    from apps.listings.models import Listing
+
+    listings = list(
+        Listing.objects.filter(is_active=True)
+        .order_by("last_seen_at")[:batch_size]
+        .values_list("pk", "source_url")
+    )
+
+    deactivated = 0
+    for pk, source_url in listings:
+        try:
+            resp = requests.get(
+                source_url,
+                timeout=10,
+                allow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; NTBot/1.0)"},
+            )
+            if resp.status_code in (404, 410):
+                Listing.objects.filter(pk=pk).update(is_active=False)
+                deactivated += 1
+            elif resp.status_code == 200:
+                body_lower = resp.text.lower()
+                if any(marker in body_lower for marker in STALE_MARKERS):
+                    Listing.objects.filter(pk=pk).update(is_active=False)
+                    deactivated += 1
+        except requests.RequestException:
+            pass  # network error — skip, will retry next run
+
+        # Be polite: 1s delay between requests
+        time.sleep(1)
+
+    logger.info("Validity check: %d/%d deactivated", deactivated, len(listings))
+    return {"checked": len(listings), "deactivated": deactivated}

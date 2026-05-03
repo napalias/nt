@@ -95,7 +95,15 @@ class DomopliusSpider(scrapy.Spider):
 
         for link in detail_links:
             url = response.urljoin(link)
-            yield scrapy.Request(url, callback=self.parse_detail)
+            yield scrapy.Request(
+                url,
+                callback=self.parse_detail,
+                meta={
+                    "playwright": True,
+                    "playwright_include_page": False,
+                    "playwright_page_goto_kwargs": {"wait_until": "networkidle"},
+                },
+            )
 
         self.current_page += 1
         if self.max_pages and self.current_page > self.max_pages:
@@ -162,10 +170,45 @@ class DomopliusSpider(scrapy.Spider):
             if m:
                 year_built = m.group(1)
 
-        photos = response.css("img[src*='domoplius']::attr(src)").getall()
-        photos += response.css("img[data-src*='domoplius']::attr(data-src)").getall()
-        photos += response.css("[style*='domoplius']").re(r'url\(["\']?(https://[^"\']+)["\']?\)')
-        photos = list(dict.fromkeys(p for p in photos if p.startswith("http") and "thumb" not in p))
+        photos = []
+        # Direct img tags
+        for sel in [
+            "img[src*='domoplius']::attr(src)",
+            "img[src*='img.']::attr(src)",
+            "img[data-src]::attr(data-src)",
+            "img[data-original]::attr(data-original)",
+            "img[data-lazy]::attr(data-lazy)",
+            ".gallery img::attr(src)",
+            ".photo img::attr(src)",
+            ".swiper img::attr(src)",
+            ".carousel img::attr(src)",
+            "picture source::attr(srcset)",
+        ]:
+            photos.extend(response.css(sel).getall())
+
+        # Background images
+        photos.extend(
+            response.css("[style*='background-image']").re(
+                r'url\(["\']?(https?://[^"\')\s]+)["\']?\)'
+            )
+        )
+
+        # Filter
+        photos = list(
+            dict.fromkeys(
+                p.split("?")[0]
+                for p in photos
+                if p.startswith("http")
+                and "logo" not in p
+                and "icon" not in p
+                and ("domoplius" in p or "img." in p or "/photos/" in p or "/images/" in p)
+            )
+        )
+
+        # og:image fallback
+        og_image = response.css('meta[property="og:image"]::attr(content)').get()
+        if og_image and og_image not in photos:
+            photos.insert(0, og_image)
 
         building_type_raw = self._get_field(
             info_table, ["namo tipas", "pastato tipas", "tipas"]

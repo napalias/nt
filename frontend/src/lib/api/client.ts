@@ -105,6 +105,14 @@ export async function geocode(q: string): Promise<GeocodeResult[]> {
 	return fetchJson<GeocodeResult[]>(`/api/geocode?q=${encodeURIComponent(q)}`);
 }
 
+export async function cleanupDescription(
+	listingId: number
+): Promise<{ cleaned_description: string }> {
+	return fetchJson<{ cleaned_description: string }>(`/api/classifier/cleanup/${listingId}`, {
+		method: 'POST'
+	});
+}
+
 export async function classifyListing(listingId: number): Promise<EvaluationResult> {
 	return fetchJson<EvaluationResult>(`/api/classifier/classify/${listingId}`, {
 		method: 'POST'
@@ -137,6 +145,18 @@ export async function getPreferences(): Promise<PreferenceResult[]> {
 
 export async function deletePreference(id: number): Promise<void> {
 	await fetch(`/api/classifier/preferences/${id}`, { method: 'DELETE' });
+}
+
+export async function excludeListing(listingId: number, reason: string): Promise<void> {
+	await fetch(`/api/exclude/${listingId}`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ reason })
+	});
+}
+
+export async function unexcludeListing(listingId: number): Promise<void> {
+	await fetch(`/api/exclude/${listingId}`, { method: 'DELETE' });
 }
 
 // --- Saved searches ---

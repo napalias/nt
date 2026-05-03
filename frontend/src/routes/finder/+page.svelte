@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { cleanupDescription, excludeListing } from '$lib/api/client';
 	import type { EvaluationResult, ListingResult } from '$lib/api/client';
 
 	let { data } = $props();
@@ -10,6 +11,22 @@
 	let reclassifyMessage = $state('');
 	let feedbackPending = $state<Record<number, boolean>>({});
 	let feedbackDone = $state<Record<number, 'like' | 'dislike'>>({});
+	let cleanupPending = $state<Record<number, boolean>>({});
+	let cleanedSummaries = $state<Record<number, string>>({});
+	let excludedIds = $state<Set<number>>(new Set());
+	let excludePending = $state<Record<number, boolean>>({});
+
+	async function handleExclude(listingId: number) {
+		excludePending = { ...excludePending, [listingId]: true };
+		try {
+			await excludeListing(listingId, '');
+			excludedIds = new Set([...excludedIds, listingId]);
+		} catch {
+			// silently fail
+		} finally {
+			excludePending = { ...excludePending, [listingId]: false };
+		}
+	}
 
 	let matches = $derived.by(() => {
 		const listingMap = new Map<number, ListingResult>();
@@ -18,6 +35,7 @@
 		}
 		return (data.evaluations ?? [])
 			.filter((e: EvaluationResult) => e.verdict === 'match' || e.verdict === 'review')
+			.filter((e: EvaluationResult) => !excludedIds.has(e.listing_id))
 			.sort((a: EvaluationResult, b: EvaluationResult) => b.match_score - a.match_score)
 			.map((e: EvaluationResult): MatchEntry => ({ ...e, listing: listingMap.get(e.listing_id) }));
 	});
@@ -70,6 +88,18 @@
 			// silently fail
 		} finally {
 			feedbackPending = { ...feedbackPending, [listingId]: false };
+		}
+	}
+
+	async function runCleanup(listingId: number) {
+		cleanupPending = { ...cleanupPending, [listingId]: true };
+		try {
+			const result = await cleanupDescription(listingId);
+			cleanedSummaries = { ...cleanedSummaries, [listingId]: result.cleaned_description };
+		} catch {
+			// silently fail
+		} finally {
+			cleanupPending = { ...cleanupPending, [listingId]: false };
 		}
 	}
 </script>
@@ -142,6 +172,17 @@
 							<h2 class="text-base font-semibold text-gray-900 flex-1 min-w-0 truncate">
 								{m.listing_title}
 							</h2>
+							<button
+								onclick={() => handleExclude(m.listing_id)}
+								disabled={!!excludePending[m.listing_id]}
+								aria-label="Išjungti skelbimą"
+								title="Išjungti"
+								class="ml-auto flex-shrink-0 rounded p-1 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
 						</div>
 
 						<!-- Price + key stats -->
@@ -179,7 +220,14 @@
 
 						<!-- AI summary -->
 						<div class="px-5 pb-3">
-							<p class="text-sm leading-relaxed text-gray-700">{m.summary}</p>
+							<p class="text-sm leading-relaxed text-gray-700">
+								{cleanedSummaries[m.listing_id] ?? m.summary}
+							</p>
+							{#if cleanedSummaries[m.listing_id]}
+								<span class="mt-1 inline-block text-[10px] font-medium text-purple-500">
+									AI išvalyta
+								</span>
+							{/if}
 						</div>
 
 						<!-- Hard filters -->
@@ -231,6 +279,24 @@
 										<path d="M19 11.75a1.25 1.25 0 1 1-2.5 0v-7.5a1.25 1.25 0 1 1 2.5 0v7.5ZM12.812 16.727a1.25 1.25 0 0 0 2.438-.587L14.5 13h1.25A2.25 2.25 0 0 0 18 10.75v-.636a2.25 2.25 0 0 0-1.494-2.121l-4.172-1.457A3.75 3.75 0 0 0 11.1 6.25H7.75a2.25 2.25 0 0 0-2.15 1.588L4.074 12.875A1.75 1.75 0 0 0 5.75 15H9.5l-.79 2.137a1.25 1.25 0 0 0 .652 1.59l3.45-2Z" />
 									</svg>
 									Nepatinka
+								</button>
+								<button
+									onclick={() => runCleanup(m.listing_id)}
+									disabled={!!cleanupPending[m.listing_id] || !!cleanedSummaries[m.listing_id]}
+									class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
+										{cleanedSummaries[m.listing_id]
+										? 'bg-purple-100 text-purple-700'
+										: 'bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700'}
+										disabled:opacity-50"
+								>
+									{#if cleanupPending[m.listing_id]}
+										<span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-500 border-t-transparent"></span>
+									{:else}
+										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+											<path fill-rule="evenodd" d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1ZM5.05 3.05a.75.75 0 0 1 1.06 0l1.062 1.06A.75.75 0 1 1 6.11 5.173L5.05 4.11a.75.75 0 0 1 0-1.06ZM14.95 3.05a.75.75 0 0 1 0 1.06l-1.06 1.062a.75.75 0 0 1-1.062-1.061l1.061-1.06a.75.75 0 0 1 1.06 0ZM3 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 3 8ZM14 8a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 14 8ZM7.172 13.889a.75.75 0 0 1-1.061-1.06l1.06-1.062a.75.75 0 0 1 1.062 1.061l-1.06 1.06ZM12.828 13.889a.75.75 0 0 1 0-1.06l1.06-1.062a.75.75 0 0 1 1.062 1.061l-1.06 1.06a.75.75 0 0 1-1.062 0ZM10 14a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 14ZM10 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" clip-rule="evenodd" />
+										</svg>
+									{/if}
+									AI valymas
 								</button>
 							</div>
 

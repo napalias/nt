@@ -1,6 +1,8 @@
 <script lang="ts">
 	import {
 		classifyListing,
+		excludeListing,
+		unexcludeListing,
 		submitFeedback,
 		type EvaluationResult,
 		type ListingResult
@@ -8,10 +10,12 @@
 
 	let {
 		listing,
-		onclose
+		onclose,
+		onexclude
 	}: {
 		listing: ListingResult;
 		onclose: () => void;
+		onexclude?: (listingId: number) => void;
 	} = $props();
 
 	let evaluation = $state<EvaluationResult | null>(null);
@@ -20,6 +24,35 @@
 	let feedbackReason = $state('');
 	let feedbackSending = $state(false);
 	let feedbackResult = $state<string[] | null>(null);
+	let excludeMode = $state(false);
+	let excludeReason = $state('');
+	let excludeSending = $state(false);
+	let excluded = $state(false);
+
+	async function doExclude() {
+		if (!excludeReason.trim()) return;
+		excludeSending = true;
+		try {
+			await excludeListing(listing.id, excludeReason);
+			excluded = true;
+			excludeMode = false;
+			excludeReason = '';
+			onexclude?.(listing.id);
+		} catch {
+			/* ignore */
+		} finally {
+			excludeSending = false;
+		}
+	}
+
+	async function doUnexclude() {
+		try {
+			await unexcludeListing(listing.id);
+			excluded = false;
+		} catch {
+			/* ignore */
+		}
+	}
 
 	async function loadEvaluation() {
 		evalLoading = true;
@@ -67,6 +100,9 @@
 		if (listing) {
 			evaluation = null;
 			feedbackResult = null;
+			excluded = false;
+			excludeMode = false;
+			excludeReason = '';
 			loadEvaluation();
 		}
 	});
@@ -260,7 +296,40 @@
 		<div class="px-4 py-3">
 			<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Jūsų nuomonė</h3>
 
-			{#if feedbackResult}
+			{#if excluded}
+				<div class="rounded bg-gray-100 p-3 text-center">
+					<p class="text-sm font-medium text-gray-600">Pašalinta</p>
+					<button
+						onclick={doUnexclude}
+						class="mt-1 text-xs text-blue-600 hover:underline"
+					>
+						Atšaukti pašalinimą
+					</button>
+				</div>
+			{:else if excludeMode}
+				<div class="space-y-2">
+					<input
+						bind:value={excludeReason}
+						placeholder="Priežastis (pvz. per toli, blogas rajonas...)"
+						class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+					/>
+					<div class="flex gap-2">
+						<button
+							onclick={doExclude}
+							disabled={excludeSending || !excludeReason.trim()}
+							class="flex-1 rounded bg-red-600 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+						>
+							{excludeSending ? 'Šalinama...' : 'Išjungti'}
+						</button>
+						<button
+							onclick={() => (excludeMode = false)}
+							class="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+						>
+							Atšaukti
+						</button>
+					</div>
+				</div>
+			{:else if feedbackResult}
 				<div class="rounded bg-blue-50 p-3">
 					<p class="text-xs font-medium text-blue-700">Išmokti prioritetai:</p>
 					<ul class="mt-1 space-y-1">
@@ -306,6 +375,12 @@
 						class="flex-1 rounded border border-red-300 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
 					>
 						👎 Nepatinka
+					</button>
+					<button
+						onclick={() => (excludeMode = true)}
+						class="flex-1 rounded border border-gray-300 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+					>
+						Išjungti
 					</button>
 				</div>
 			{/if}

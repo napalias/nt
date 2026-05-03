@@ -618,6 +618,20 @@ def _cadastral_plot_out(plot: CadastralPlot) -> dict:
 # --- Listing exclusion ---
 
 
+class ValidityCheckResponse(Schema):
+    checked: int
+    deactivated: int
+
+
+@router.post("/check-validity", response=ValidityCheckResponse)
+def check_validity(request):
+    """Trigger a synchronous validity check on the oldest-seen active listings."""
+    from apps.listings.tasks import check_listing_validity
+
+    result = check_listing_validity(batch_size=50)
+    return result
+
+
 class ExcludeIn(Schema):
     reason: str = ""
 
