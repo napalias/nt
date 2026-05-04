@@ -34,6 +34,12 @@
 	};
 	const defaultColor = '#3b82f6';
 
+	const verdictLabels: Record<string, string> = {
+		match: 'Tinka',
+		review: 'Peržiūrėti',
+		skip: 'Praleisti'
+	};
+
 	function getColor(listingId: number): string {
 		const ev = evaluations[listingId];
 		if (!ev) return defaultColor;
@@ -108,7 +114,7 @@
 
 			const ev = evaluations[listing.id];
 			const scoreHtml = ev
-				? `<br/><span style="color:${color};font-weight:600">${Math.round(ev.match_score * 100)}% — ${ev.verdict}</span>`
+				? `<br/><span style="color:${color};font-weight:600">${Math.round(ev.match_score * 100)}% — ${verdictLabels[ev.verdict] || ev.verdict}</span>`
 				: '';
 
 			const popup = new maplibregl.Popup({ offset: 12, closeButton: false }).setHTML(

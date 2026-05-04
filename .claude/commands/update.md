@@ -4,11 +4,9 @@ One-command refresh: scrape all sources for Kretinga area, then evaluate new lis
 
 ## Steps
 
-1. **Scrape Domoplius** (houses, flats, plots for Kretinga area):
+1. **Scrape Domoplius** (houses only for Kretinga area):
    ```bash
-   docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=3 -a property_type=namai -a region=kretinga -s HTTPCACHE_ENABLED=false
-   docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=2 -a property_type=butai -a region=kretinga -s HTTPCACHE_ENABLED=false
-   docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=2 -a property_type=sklypai -a region=kretinga -s HTTPCACHE_ENABLED=false
+   docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=5 -a property_type=namai -a region=kretinga -s HTTPCACHE_ENABLED=false
    ```
 
 2. **Check validity** — mark sold/removed listings as inactive:

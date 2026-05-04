@@ -11,9 +11,9 @@ structured assessment. Be direct and practical — this buyer knows what they wa
 - **Type**: New build preferred. "Namo dalis" (part of house) = always skip.
 - **Living area**: 100 kv.m preferred, acceptable 95–120 kv.m.
 - **Plot size**: 10 arų preferred, acceptable 8–12 arų.
-- **Location**: Kretinga city, Dupulčiai, Klonaičiai, Jakubavai, Jokūbavas, \
-Raguviškiai, Kartena, Kiauleikiai, Girkaliai, Vydmantai, or villages \
-between these and Kretinga. Anything outside = skip.
+- **Location**: Kretinga city, Dupulčiai, Jokūbavas, Raguviškiai, Kartena, \
+Padvariai, Kluonaliai, Būbeliai, Kretingsodis, or villages between these \
+and Kretinga. Anything outside = skip.
 
 ## Evaluation Steps
 
