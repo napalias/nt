@@ -42,6 +42,7 @@ def summarize_stats(stats: dict) -> dict:
         "items_saved": saved,
         "items_new": stats.get("nt/items_new", 0),
         "items_updated": stats.get("nt/items_updated", 0),
+        "items_unchanged": stats.get("nt/items_unchanged", 0),
         "items_dropped": dropped,
         "errors": stats.get("log_count/ERROR", 0),
     }

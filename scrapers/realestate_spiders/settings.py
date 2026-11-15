@@ -59,6 +59,8 @@ PLAYWRIGHT_LAUNCH_OPTIONS = {"headless": True}
 # ---------------------------------------------------------------------------
 ITEM_PIPELINES: dict[str, int] = {
     # Listing pipelines (skip non-ListingItem automatically)
+    # Scrub first: no contact data may reach validation, hashing, logs or the database.
+    "realestate_spiders.pipelines.ScrubPipeline": 50,
     "realestate_spiders.pipelines.ValidatePipeline": 100,
     "realestate_spiders.pipelines.NormalizePipeline": 200,
     "realestate_spiders.pipelines.GeocodePipeline": 300,
