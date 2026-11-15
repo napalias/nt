@@ -7,7 +7,8 @@ from django.utils import timezone
 from model_bakery import baker
 
 from apps.listings.models import Listing, ScrapeRun
-from apps.listings.scrape_runs import SPIDERS, normalize_drop_reason, summarize_stats
+from apps.listings.scrape_runs import normalize_drop_reason, summarize_stats
+from apps.listings.sources import SOURCES
 
 
 class TestSummarizeStats:
@@ -101,12 +102,32 @@ class TestScrapeRunsApi:
         _run("domoplius", 30, status=ScrapeRun.Status.EMPTY)
         baker.make(Listing, source="domoplius", location=Point(21.2, 55.9, srid=4326))
         data = {row["spider"]: row for row in Client().get("/api/scrapes/summary").json()}
-        assert set(data) == set(SPIDERS)
+        assert list(data) == [s.spider for s in SOURCES]  # every source, registry order
         assert data["domoplius"]["last_run"]["status"] == "empty"
         assert data["domoplius"]["last_ok_at"] is not None
         assert data["domoplius"]["listings_total"] == 1
         assert data["domoplius"]["new_7d"] == 1
         assert data["tpdris"]["last_run"] is None
+
+    def test_summary_carries_registry_config(self):
+        data = {row["spider"]: row for row in Client().get("/api/scrapes/summary").json()}
+        realu = data["realu"]  # registered, spider not written yet, never run
+        assert realu["state"] == "not_built"
+        assert realu["enabled"] is False
+        assert realu["label"] == "Realu.lt"
+        assert realu["kind"] == "listing"
+        assert realu["last_run"] is None
+        assert realu["runs_7d"] == 0
+        assert realu["listings_total"] == 0
+        assert data["domoplius"]["state"] == "scheduled"
+        assert data["domoplius"]["fetch_mode"] == "plain"
+        assert data["domoplius"]["schedule"] == "0 6 * * *"
+        assert data["domoplius"]["start_urls"]
+        assert data["aruodas"]["state"] == "paused"
+        assert data["aruodas"]["note"]
+        assert data["pamario-nt"]["delay_s"] == 10
+        assert data["tpdris"]["kind"] == "gov"
+        assert data["tpdris"]["listings_total"] is None
 
     def test_new_listings_of_a_run(self):
         run = baker.make(

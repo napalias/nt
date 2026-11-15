@@ -1,13 +1,10 @@
 """Turn Scrapy crawl stats into ScrapeRun fields. Pure functions, used by the scrapers'
-ScrapeRunRecorder extension and unit-tested here."""
+ScrapeRunRecorder extension and unit-tested here.
+
+Which spiders exist, and which feed Listing, is the source registry's job
+(apps/listings/sources.py)."""
 
 from apps.listings.models import ScrapeRun
-
-# Every spider the /scans page reports on, in display order.
-SPIDERS = ("domoplius", "skelbiu", "aruodas", "alio", "infostatyba", "tpdris")
-
-# Spiders whose items land in Listing with source == spider name.
-LISTING_SPIDERS = ("domoplius", "skelbiu", "aruodas", "alio")
 
 
 def normalize_drop_reason(message: str) -> str:
