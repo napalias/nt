@@ -78,6 +78,8 @@ class ClassifyBatchIn(Schema):
 
 class ClassifyBatchOut(Schema):
     classified_count: int
+    failed_count: int = 0
+    errors: dict[str, int] = {}
     evaluations: list[EvaluationOut]
 
 
@@ -88,10 +90,12 @@ class ClassifyBatchOut(Schema):
 def classify_many(request, body: ClassifyBatchIn):
     """Classify unclassified active listings in batch."""
     limit = min(body.limit, MAX_LIMIT)
-    evaluations = classify_batch(limit=limit)
+    result = classify_batch(limit=limit)
     return {
-        "classified_count": len(evaluations),
-        "evaluations": [_evaluation_to_out(e) for e in evaluations],
+        "classified_count": len(result.items),
+        "failed_count": result.failed,
+        "errors": result.error_counts,
+        "evaluations": [_evaluation_to_out(e) for e in result.items],
     }
 
 
@@ -181,8 +185,12 @@ def cleanup_single(request, listing_id: int):
 @router.post("/cleanup/batch")
 def cleanup_many(request):
     """Clean descriptions for listings with marketing fluff."""
-    count = _cleanup_batch(limit=50)
-    return {"cleaned_count": count}
+    result = _cleanup_batch(limit=50)
+    return {
+        "cleaned_count": len(result.items),
+        "failed_count": result.failed,
+        "errors": result.error_counts,
+    }
 
 
 class ClusterOut(Schema):

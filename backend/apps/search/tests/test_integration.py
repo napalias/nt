@@ -23,6 +23,7 @@ from model_bakery import baker
 
 from apps.cadastre.models import HeritageObject, SpecialLandUseCondition
 from apps.classifier.models import ListingEvaluation
+from apps.classifier.tests.helpers import CLASSIFY_PAYLOAD, make_response
 from apps.developers.models import Developer
 from apps.listings.models import ExcludedListing, Listing
 from apps.permits.models import BuildingPermit
@@ -49,41 +50,22 @@ def _make_mock_classify_response(
     verdict: str = "match",
     match_score: float = 0.85,
     summary: str = "Puikus namas.",
-) -> MagicMock:
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "evaluate_listing"
-    tool_block.input = {
-        "verdict": verdict,
-        "match_score": match_score,
-        "summary": summary,
-        "hard_filter_results": {
-            "price_ok": True,
-            "type_ok": True,
-            "area_ok": True,
-            "plot_ok": True,
-            "location_ok": True,
-        },
-        "quality_notes": ["Good condition"],
-        "red_flags": [],
-    }
-    response = MagicMock()
-    response.content = [tool_block]
-    return response
+):
+    return make_response(
+        {
+            **CLASSIFY_PAYLOAD,
+            "verdict": verdict,
+            "match_score": match_score,
+            "summary": summary,
+            "quality_notes": ["Good condition"],
+        }
+    )
 
 
-def _make_mock_extract_response() -> MagicMock:
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "extract_preferences"
-    tool_block.input = {
-        "patterns": [
-            {"pattern": "Prefers houses with large plots", "weight": 1.5},
-        ]
-    }
-    response = MagicMock()
-    response.content = [tool_block]
-    return response
+def _make_mock_extract_response():
+    return make_response(
+        {"patterns": [{"pattern": "Prefers houses with large plots", "weight": 1.5}]}
+    )
 
 
 def _make_kretinga_listing(**overrides) -> Listing:

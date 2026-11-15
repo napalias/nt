@@ -126,6 +126,10 @@ NOMINATIM_URL = env("NOMINATIM_URL", default="http://nominatim:8080")
 
 # --- AI Classification ---
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+# Narrative evaluation and planning-document extraction.
+CLAUDE_EVAL_MODEL = env("CLAUDE_EVAL_MODEL", default="claude-sonnet-5-5")
+# Cleanup, preference extraction and the dedup fallback.
+CLAUDE_FAST_MODEL = env("CLAUDE_FAST_MODEL", default="claude-haiku-5-5")
 
 # --- Rate limiting ---
 RATELIMIT_USE_CACHE = "default"

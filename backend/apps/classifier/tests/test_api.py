@@ -8,44 +8,16 @@ from django.test import Client
 from model_bakery import baker
 
 from apps.classifier.models import LearnedPreference, ListingEvaluation, UserFeedback
+from apps.classifier.tests.helpers import CLASSIFY_PAYLOAD, make_response
 from apps.listings.models import Listing
 
 
 def _make_mock_classify_response():
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "evaluate_listing"
-    tool_block.input = {
-        "verdict": "match",
-        "match_score": 0.85,
-        "summary": "Puikus namas.",
-        "hard_filter_results": {
-            "price_ok": True,
-            "type_ok": True,
-            "area_ok": True,
-            "plot_ok": True,
-            "location_ok": True,
-        },
-        "quality_notes": ["Good"],
-        "red_flags": [],
-    }
-    response = MagicMock()
-    response.content = [tool_block]
-    return response
+    return make_response({**CLASSIFY_PAYLOAD, "summary": "Puikus namas."})
 
 
 def _make_mock_extract_response():
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "extract_preferences"
-    tool_block.input = {
-        "patterns": [
-            {"pattern": "Prefers open layout", "weight": 1.0},
-        ]
-    }
-    response = MagicMock()
-    response.content = [tool_block]
-    return response
+    return make_response({"patterns": [{"pattern": "Prefers open layout", "weight": 1.0}]})
 
 
 @pytest.fixture
@@ -107,6 +79,31 @@ class TestClassifyEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["classified_count"] == 3
+        assert data["failed_count"] == 0
+        assert data["errors"] == {}
+
+    @patch("apps.classifier.services._get_client")
+    def test_classify_batch_reports_failures(self, mock_get_client, api_client):
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = RuntimeError("model not found")
+        mock_get_client.return_value = mock_client
+        baker.make(
+            Listing,
+            is_active=True,
+            location=Point(21.2420, 55.8835, srid=4326),
+            address_raw="Test",
+        )
+
+        resp = api_client.post(
+            "/api/classifier/classify/batch",
+            data=json.dumps({"limit": 10}),
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["classified_count"] == 0
+        assert data["failed_count"] == 1
+        assert data["errors"] == {"RuntimeError": 1}
 
 
 @pytest.mark.django_db
