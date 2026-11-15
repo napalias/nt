@@ -108,3 +108,66 @@ class ListingCluster(models.Model):
     def __str__(self) -> str:
         count = self.listings.count()
         return f"Cluster #{self.pk} ({count} listings, {self.confidence:.0%})"
+
+
+class JudgmentLog(models.Model):
+    """One row per question for every judge.ask() call in shadow or on mode.
+
+    Rows of one Jev request share ``request_id``. Token counts and Jev latency belong to the
+    whole request and are repeated on each of its rows: sum them over distinct request_id.
+    """
+
+    class DecidedBy(models.TextChoices):
+        JEV = "jev", "Jev"
+        FALLBACK = "fallback", "Atsarginis sprendėjas"
+        NONE = "none", "Niekas"
+
+    request_id = models.UUIDField(db_index=True, verbose_name="Užklausos ID")
+    kind = models.CharField(max_length=32, verbose_name="Sprendimo rūšis")
+    subject_id = models.CharField(max_length=64, verbose_name="Objekto ID")
+    question = models.CharField(max_length=64, verbose_name="Klausimas")
+    question_type = models.CharField(max_length=8, verbose_name="Klausimo tipas")
+    mode = models.CharField(max_length=8, verbose_name="Režimas")
+    decided_by = models.CharField(max_length=8, choices=DecidedBy.choices, verbose_name="Nusprendė")
+    jev_answer = models.JSONField(null=True, blank=True, verbose_name="Jev atsakymas")
+    jev_probability = models.FloatField(null=True, blank=True, verbose_name="Jev tikimybė")
+    jev_detail = models.JSONField(default=dict, blank=True, verbose_name="Jev atsakymo detalės")
+    jev_error = models.TextField(blank=True, verbose_name="Jev klaida")
+    threshold = models.JSONField(default=dict, verbose_name="Slenkstis")
+    fallback_answer = models.JSONField(
+        null=True, blank=True, verbose_name="Atsarginio sprendėjo atsakymas"
+    )
+    fallback_error = models.TextField(blank=True, verbose_name="Atsarginio sprendėjo klaida")
+    agreement = models.BooleanField(null=True, blank=True, verbose_name="Sutapo")
+    jev_model = models.CharField(max_length=64, verbose_name="Jev modelis (prašytas)")
+    jev_model_answered = models.CharField(
+        max_length=64, blank=True, verbose_name="Jev modelis (atsakęs)"
+    )
+    fallback_model = models.CharField(
+        max_length=64, blank=True, verbose_name="Atsarginio sprendėjo modelis"
+    )
+    input_tokens = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Įvesties žetonai (visos užklausos)"
+    )
+    output_tokens = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Išvesties žetonai (visos užklausos)"
+    )
+    latency_ms = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Jev trukmė, ms (visos užklausos)"
+    )
+    fallback_latency_ms = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="Atsarginio sprendėjo trukmė, ms"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Sukurta")
+
+    class Meta:
+        verbose_name = "Jev sprendimo įrašas"
+        verbose_name_plural = "Jev sprendimų įrašai"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["kind", "question", "created_at"]),
+            models.Index(fields=["kind", "subject_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.subject_id} {self.question} → {self.decided_by}"
