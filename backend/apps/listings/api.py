@@ -55,7 +55,7 @@ def list_runs(request, spider: str | None = None, limit: int = 50):
     runs = ScrapeRun.objects.all()
     if spider:
         runs = runs.filter(spider=spider)
-    return runs[: min(limit, 500)]
+    return runs[: max(1, min(limit, 500))]
 
 
 @router.get("/summary", response=list[SpiderSummaryOut])

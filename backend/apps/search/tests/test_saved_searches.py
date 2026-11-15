@@ -190,6 +190,55 @@ class TestNotifySavedSearches:
         assert "Naujas namas" in call_kwargs.kwargs["message"]
 
     @patch("apps.search.tasks.send_mail")
+    def test_skips_sending_when_no_recipient_configured(
+        self, mock_send_mail, saved_search, settings
+    ):
+        from apps.search.tasks import notify_saved_searches
+
+        settings.NOTIFY_EMAIL = ""
+        past = timezone.now() - timezone.timedelta(hours=1)
+        SavedSearch.objects.filter(pk=saved_search.pk).update(last_notified_at=past)
+        saved_search.refresh_from_db()
+        before = saved_search.last_notified_at
+
+        baker.make(
+            Listing,
+            title="Naujas namas",
+            price=Decimal("200000"),
+            property_type="house",
+            listing_type="sale",
+            is_active=True,
+            location=Point(21.2420, 55.8835, srid=4326),
+        )
+
+        result = notify_saved_searches()
+        assert result == {"searches_checked": 0, "notified": 0, "listings_sent": 0}
+        mock_send_mail.assert_not_called()
+        # Nothing was sent, so the watermark must not move: the next run still sends the listing.
+        saved_search.refresh_from_db()
+        assert saved_search.last_notified_at == before
+
+    @patch("apps.search.tasks.send_mail")
+    def test_recipient_comes_from_settings(self, mock_send_mail, saved_search, settings):
+        from apps.search.tasks import notify_saved_searches
+
+        settings.NOTIFY_EMAIL = "digest@example.test"
+        past = timezone.now() - timezone.timedelta(hours=1)
+        SavedSearch.objects.filter(pk=saved_search.pk).update(last_notified_at=past)
+        baker.make(
+            Listing,
+            title="Naujas namas",
+            price=Decimal("200000"),
+            property_type="house",
+            listing_type="sale",
+            is_active=True,
+            location=Point(21.2420, 55.8835, srid=4326),
+        )
+
+        notify_saved_searches()
+        assert mock_send_mail.call_args.kwargs["recipient_list"] == ["digest@example.test"]
+
+    @patch("apps.search.tasks.send_mail")
     def test_updates_last_notified_at(self, mock_send_mail, saved_search):
         from apps.search.tasks import notify_saved_searches
 

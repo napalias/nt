@@ -107,6 +107,16 @@ class GeocodeResult(Schema):
     display_name: str
 
 
+class SearchDefaultsOut(Schema):
+    radius_m: int
+
+
+@router.get("/search/defaults", response=SearchDefaultsOut)
+def search_defaults(request):
+    """Search defaults the frontend reads instead of hardcoding them."""
+    return {"radius_m": settings.DEFAULT_SEARCH_RADIUS_M}
+
+
 @router.get("/search", response=SearchResponse)
 @ratelimit(rate="60/m", key="ip")
 def search_listings(request, params: Query[SearchParams]):

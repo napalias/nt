@@ -183,7 +183,7 @@ The `.env` file (copied from `.env.example`) must define:
 - One spider per source, named after the domain (`aruodas`, `domoplius`, ...)
 - Spiders only extract; pipelines validate, geocode, and persist
 - `DOWNLOAD_DELAY` minimum 3s, `CONCURRENT_REQUESTS_PER_DOMAIN: 1` — be polite
-- HTTPCACHE enabled in dev for fast iteration without re-hitting sites
+- HTTPCACHE is off by default so scheduled scans always fetch fresh pages. Set `SCRAPY_HTTPCACHE=1` to enable it for dev iteration without re-hitting sites
 - Use `scrapy-playwright` only when the site requires JS rendering — default to plain Scrapy
 - Before writing or fixing a spider, run `pnpm inspect <site>` and read `scrapers/recon/out/<site>-*/report.md` for real selectors, card containers, pagination and JSON endpoints
 - Scraper unit tests are stdlib `unittest` in `scrapers/tests/` (no pytest in that image): `docker compose exec scraper_worker python -m unittest discover -s tests`

@@ -5,6 +5,8 @@
 #
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 
+import os
+
 BOT_NAME = "realestate_spiders"
 
 SPIDER_MODULES = ["realestate_spiders.spiders"]
@@ -19,8 +21,9 @@ CONCURRENT_REQUESTS = 4
 # Logging
 LOG_LEVEL = "INFO"
 
-# HTTP cache — enabled for dev to avoid re-hitting sites during iteration
-HTTPCACHE_ENABLED = True
+# HTTP cache — OFF by default: a cached index page or 403 would replay stale results into
+# scheduled scans and corrupt "new items" counts. Opt in for dev iteration: SCRAPY_HTTPCACHE=1
+HTTPCACHE_ENABLED = os.environ.get("SCRAPY_HTTPCACHE") == "1"
 HTTPCACHE_DIR = "httpcache"
 HTTPCACHE_EXPIRATION_SECS = 86400  # 24 hours
 

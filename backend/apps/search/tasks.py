@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
+from django.conf import settings
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.core.mail import send_mail
@@ -16,6 +17,12 @@ def notify_saved_searches() -> dict:
     """Check each active saved search for new listings and send digest emails."""
     from apps.listings.models import Listing
     from apps.search.models import SavedSearch
+
+    if not settings.NOTIFY_EMAIL:
+        # No recipient configured: skip before touching last_notified_at, so nothing is lost
+        # and the next run after NOTIFY_EMAIL is set still sends the pending listings.
+        logger.info("NOTIFY_EMAIL is not set; skipping saved-search digest emails")
+        return {"searches_checked": 0, "notified": 0, "listings_sent": 0}
 
     total_searches = 0
     total_notified = 0
@@ -83,5 +90,5 @@ def _send_digest_email(search, listings: list) -> None:
         subject=f"[NT] {len(listings)} nauji skelbimai: {search.name}",
         message=body,
         from_email="noreply@nt.local",
-        recipient_list=["napalias@gmail.com"],
+        recipient_list=[settings.NOTIFY_EMAIL],
     )

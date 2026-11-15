@@ -40,7 +40,7 @@
 	let sortMode = $state<SortMode>('score');
 
 	let center = $state(data.center ?? { lat: 55.8835, lng: 21.242 });
-	let radiusM = $state(data.radiusM ?? 5000);
+	let radiusM = $state(data.radiusM);
 
 	let minPrice = $state<number | undefined>(undefined);
 	let maxPrice = $state<number | undefined>(undefined);

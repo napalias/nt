@@ -14,7 +14,7 @@
 	import SearchBar from '$lib/components/SearchBar.svelte';
 
 	function handleSelect(result: GeocodeResult) {
-		goto(`/search?lat=${result.lat}&lng=${result.lng}&radius=5000`);
+		goto(`/search?lat=${result.lat}&lng=${result.lng}`);
 	}
 
 	let topMatches = $state<EvaluationResult[]>([]);
@@ -77,25 +77,25 @@
 
 		<div class="mt-4 flex flex-wrap justify-center gap-2">
 			<a
-				href="/search?lat=55.8835&lng=21.242&radius=5000"
+				href="/search?lat=55.8835&lng=21.242"
 				class="rounded-full bg-blue-100 px-4 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
 			>
 				Kretinga
 			</a>
 			<a
-				href="/search?lat=55.7068&lng=21.1346&radius=5000"
+				href="/search?lat=55.7068&lng=21.1346"
 				class="rounded-full bg-blue-100 px-4 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
 			>
 				Palanga
 			</a>
 			<a
-				href="/search?lat=55.7033&lng=21.1443&radius=5000"
+				href="/search?lat=55.7033&lng=21.1443"
 				class="rounded-full bg-blue-100 px-4 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
 			>
 				Klaipėda
 			</a>
 			<a
-				href="/search?lat=54.6872&lng=25.2797&radius=5000"
+				href="/search?lat=54.6872&lng=25.2797"
 				class="rounded-full bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-200"
 			>
 				Vilnius

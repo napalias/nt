@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -7,7 +8,9 @@ class SavedSearch(models.Model):
     name = models.CharField(max_length=200, verbose_name="Pavadinimas")
     lat = models.FloatField(verbose_name="Platuma")
     lng = models.FloatField(verbose_name="Ilguma")
-    radius_m = models.IntegerField(default=5000, verbose_name="Spindulys (m)")
+    radius_m = models.IntegerField(
+        default=settings.DEFAULT_SEARCH_RADIUS_M, verbose_name="Spindulys (m)"
+    )
     min_price = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Min kaina"
     )
