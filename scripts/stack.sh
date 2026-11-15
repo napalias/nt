@@ -10,8 +10,12 @@
 #   pnpm scrape           scan all listing portals now (domoplius, skelbiu, aruodas, alio)
 #   pnpm scrape alio 5    scan one spider, 5 pages (any spider: infostatyba, tpdris, ...)
 #   pnpm inspect domoplius --follow 2
-#                         read-only Playwright map of a site: buttons, ids, classes, selectors,
-#                         forms, card patterns, XHR endpoints → scrapers/recon/out/*/report.md
+#                         fetch a site with plain HTTP, curl_cffi and Playwright, give a verdict
+#                         (plain | curl_cffi | playwright | blocked) and wall kind (captcha | login |
+#                         cookie_wall | none), then map buttons, selectors, forms, card patterns,
+#                         XHR endpoints → scrapers/recon/out/*/report.md. Presets: all NT portals
+#                         (see scrapers/recon/SITES.md). Honors robots.txt, 3 s (10 s slow hosts)
+#                         between requests; --document-only loads just the HTML.
 #
 # Scheduled scans run by themselves in the scraper_worker container (see config/celery.py).
 set -euo pipefail
