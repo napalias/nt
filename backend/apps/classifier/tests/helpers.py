@@ -55,6 +55,12 @@ CLASSIFY_PAYLOAD = {
     "red_flags": [],
 }
 
+NARRATIVE_PAYLOAD = {
+    "summary": "Naujas namas Kretingoje, kaina ir plotas atitinka kriterijus.",
+    "quality_notes": ["Geros nuotraukos", "Pilnas aprašymas"],
+    "red_flags": [],
+}
+
 PREFERENCES_PAYLOAD = {
     "patterns": [
         {"pattern": "Prefers open-plan layouts", "weight": 1.2},
