@@ -173,7 +173,8 @@ class TestSettings:
         assert base.JEV_MODEL == "jev-1.14.0"
         assert base.JEV_DEFAULT_THRESHOLD["yes"] == 0.90
         assert base.JEV_DEFAULT_THRESHOLD["no"] == 0.10
-        assert base.JEV_THRESHOLDS == {}
+        # The only shipped override is dedup's grey band (apps/classifier/dedup.py).
+        assert base.JEV_THRESHOLDS == {"same_property": {"yes": 0.8, "no": 0.2}}
 
     def test_threshold_override_per_question(self, settings):
         settings.JEV_THRESHOLDS = {"is_house_ad": {"yes": 0.97}}
