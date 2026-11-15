@@ -42,7 +42,7 @@ class InfostatybaSpider(scrapy.Spider):
         self.days_back = int(days_back)
         self.current_page = 1
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         date_to = datetime.now(UTC).strftime("%Y-%m-%d")
         date_from = (datetime.now(UTC) - timedelta(days=self.days_back)).strftime("%Y-%m-%d")
 

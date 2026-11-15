@@ -86,7 +86,12 @@ realestate/
 All run from repo root.
 
 ```bash
-# Bring up everything
+# One-command boot / stop / restart (scripts/stack.sh: starts Docker, ups all, migrates)
+pnpm start
+pnpm stop
+pnpm restart
+
+# Bring up everything (raw compose)
 docker compose up -d
 
 # Bring up everything and watch logs
@@ -129,11 +134,12 @@ docker compose down -v
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:5173 |
+| Scan history | http://localhost:5173/scans (ScrapeRun rows written by `realestate_spiders.extensions.ScrapeRunRecorder`) |
 | Backend API | http://localhost:8000/api |
 | Backend admin | http://localhost:8000/admin |
 | OpenAPI docs | http://localhost:8000/api/docs |
 | Nominatim | http://localhost:7070 |
-| MailHog UI | http://localhost:8025 |
+| Mailpit UI | http://localhost:8025 |
 | Postgres | localhost:5432 (user: postgres / pass: postgres) |
 
 ## Environment variables
@@ -179,6 +185,8 @@ The `.env` file (copied from `.env.example`) must define:
 - `DOWNLOAD_DELAY` minimum 3s, `CONCURRENT_REQUESTS_PER_DOMAIN: 1` — be polite
 - HTTPCACHE enabled in dev for fast iteration without re-hitting sites
 - Use `scrapy-playwright` only when the site requires JS rendering — default to plain Scrapy
+- Before writing or fixing a spider, run `pnpm inspect <site>` and read `scrapers/recon/out/<site>-*/report.md` for real selectors, card containers, pagination and JSON endpoints
+- Scraper unit tests are stdlib `unittest` in `scrapers/tests/` (no pytest in that image): `docker compose exec scraper_worker python -m unittest discover -s tests`
 
 ## Conventions Claude Code should follow
 
@@ -192,6 +200,9 @@ The `.env` file (copied from `.env.example`) must define:
 
 ## Known gotchas
 
+- **Nominatim import needs ~8 GB Docker memory.** With less, osm2pgsql dies with "server closed the connection unexpectedly" and Nominatim never answers, so every scraped listing is dropped as "Cannot geocode". `pnpm start` warns below 6 GB.
+- **Spiders use `async def start()`, not `start_requests()`.** Scrapy 2.20 no longer calls `start_requests()`; a spider that defines only that sends zero requests and still exits 0.
+- **Nominatim's volume must be mounted at `/var/lib/postgresql/16/main`** (mediagis 4.5 runs PG 16). The old `/14/main` path left the DB in the container layer, so every `pnpm restart` silently re-imported for ~20 min and all scraped items were dropped meanwhile. The /scans page shows that as "Cannot geocode" drops.
 - **Nominatim first boot is slow.** It downloads + indexes the Lithuania OSM extract, ~5–10 min. Watch logs with `docker compose logs -f nominatim`. Subsequent boots are instant.
 - **GeoDjango on Apple Silicon / Linux ARM** can have GDAL version mismatches. The Dockerfile pins a working combo; don't change `python:3.12-slim` casually.
 - **Scrapy from inside Docker network**: it talks to `nominatim:8080`, not `localhost:7070`. Use the `NOMINATIM_URL` env var.

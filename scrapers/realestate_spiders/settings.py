@@ -66,3 +66,8 @@ ITEM_PIPELINES: dict[str, int] = {
     "realestate_spiders.pipelines.PermitMatchDeveloperPipeline": 700,
     "realestate_spiders.pipelines.PermitWritePipeline": 800,
 }
+
+# Record each run (pages, found, new, updated, dropped) for the frontend /scans page.
+EXTENSIONS = {
+    "realestate_spiders.extensions.ScrapeRunRecorder": 500,
+}

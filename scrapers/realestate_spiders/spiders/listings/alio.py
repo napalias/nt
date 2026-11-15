@@ -69,7 +69,7 @@ class AlioSpider(scrapy.Spider):
             "playwright_page_goto_kwargs": {"wait_until": "networkidle"},
         }
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         base = CATEGORY_PATHS.get(self.property_type)
         if not base:
             self.logger.error("Unknown property_type: %s", self.property_type)

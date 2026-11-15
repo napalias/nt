@@ -6,6 +6,7 @@ from ninja import NinjaAPI
 from apps.cadastre.api import router as cadastre_router
 from apps.classifier.api import router as classifier_router
 from apps.developers.api import router as developers_router
+from apps.listings.api import router as scrapes_router
 from apps.permits.api import router as permits_router
 from apps.planning.api import router as planning_router
 from apps.search.api import router as search_router
@@ -17,6 +18,7 @@ api.add_router("/developers/", developers_router)
 api.add_router("/layers/", cadastre_router)
 api.add_router("/permits/", permits_router)
 api.add_router("/planning/", planning_router)
+api.add_router("/scrapes/", scrapes_router)
 
 
 def healthcheck(request) -> JsonResponse:

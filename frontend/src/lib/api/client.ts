@@ -350,3 +350,55 @@ export async function fetchFullSearch(params: {
 	const query = buildQuery(params as unknown as Record<string, unknown>);
 	return fetchJson<FullSearchResponse>(`/api/search/full${query}`);
 }
+
+// --- Scan history (/scans) ---
+
+export type ScrapeStatus = 'running' | 'ok' | 'empty' | 'blocked' | 'failed';
+
+export interface ScrapeRun {
+	id: number;
+	spider: string;
+	status: ScrapeStatus;
+	started_at: string;
+	finished_at: string | null;
+	finish_reason: string;
+	pages_crawled: number;
+	items_found: number;
+	items_saved: number;
+	items_new: number;
+	items_updated: number;
+	items_dropped: number;
+	errors: number;
+	drop_reasons: Record<string, number>;
+}
+
+export interface SpiderSummary {
+	spider: string;
+	last_run: ScrapeRun | null;
+	last_ok_at: string | null;
+	runs_7d: number;
+	listings_total: number | null;
+	new_7d: number | null;
+}
+
+export interface NewListing {
+	id: number;
+	title: string;
+	source_url: string;
+	price: number | null;
+	city: string;
+	address_raw: string;
+	first_seen_at: string;
+}
+
+export async function getScrapeSummary(): Promise<SpiderSummary[]> {
+	return fetchJson<SpiderSummary[]>('/api/scrapes/summary');
+}
+
+export async function getScrapeRuns(spider?: string, limit = 50): Promise<ScrapeRun[]> {
+	return fetchJson<ScrapeRun[]>(`/api/scrapes/runs${buildQuery({ spider, limit })}`);
+}
+
+export async function getRunNewListings(runId: number): Promise<NewListing[]> {
+	return fetchJson<NewListing[]>(`/api/scrapes/runs/${runId}/new`);
+}

@@ -63,7 +63,7 @@ class DomopliusSpider(scrapy.Spider):
         self.region = region
         self.current_page = 1
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         path_template = CATEGORY_PATHS.get(self.property_type)
         if not path_template:
             self.logger.error("Unknown property_type: %s", self.property_type)
@@ -78,7 +78,10 @@ class DomopliusSpider(scrapy.Spider):
             meta={
                 "playwright": True,
                 "playwright_include_page": False,
-                "playwright_page_goto_kwargs": {"wait_until": "networkidle"},
+                "playwright_page_goto_kwargs": {
+                    "wait_until": "domcontentloaded",
+                    "timeout": 60000,
+                },
             },
         )
 
@@ -101,7 +104,10 @@ class DomopliusSpider(scrapy.Spider):
                 meta={
                     "playwright": True,
                     "playwright_include_page": False,
-                    "playwright_page_goto_kwargs": {"wait_until": "networkidle"},
+                    "playwright_page_goto_kwargs": {
+                        "wait_until": "domcontentloaded",
+                        "timeout": 60000,
+                    },
                 },
             )
 
@@ -120,7 +126,10 @@ class DomopliusSpider(scrapy.Spider):
             meta={
                 "playwright": True,
                 "playwright_include_page": False,
-                "playwright_page_goto_kwargs": {"wait_until": "networkidle"},
+                "playwright_page_goto_kwargs": {
+                    "wait_until": "domcontentloaded",
+                    "timeout": 60000,
+                },
             },
         )
 

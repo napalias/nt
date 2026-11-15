@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Real estate scrapers"
 requires-python = ">=3.12"
 dependencies = [
-    "scrapy>=2.11",
+    "scrapy>=2.13",  # spiders use the async start() entry point
     "scrapy-playwright>=0.0.42",
     "playwright>=1.47",
     "curl-cffi>=0.7",
@@ -24,6 +24,8 @@ dependencies = [
     "owslib>=0.32",
     "anthropic>=0.40",
     "requests>=2.32",
+    # scraper_worker runs the backend's Celery app to consume the `scraping` queue:
+    "celery[redis]>=5.4",
 ]
 
 [tool.setuptools.packages.find]

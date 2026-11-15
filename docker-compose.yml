@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    # Multi-arch PostGIS build (native arm64 + amd64) from the PostGIS docker maintainer.
+    # postgis/postgis is amd64-only and runs emulated on Apple Silicon.
+    image: imresamu/postgis:16-3.4
     container_name: re_postgres
     environment:
       POSTGRES_DB: realestate
@@ -9,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_multiarch:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -48,7 +50,9 @@ services:
     ports:
       - "7070:8080"
     volumes:
-      - nominatim_data:/var/lib/postgresql/14/main
+      # mediagis/nominatim:4.5 runs PostgreSQL 16. Mounting the old /14/ path left the DB in the
+      # container layer, so every `pnpm restart` re-imported Lithuania (~20 min).
+      - nominatim_data:/var/lib/postgresql/16/main
       - nominatim_flatnode:/nominatim
     shm_size: 2gb
     tmpfs:
@@ -95,6 +99,28 @@ services:
     depends_on:
       - backend
 
+  # Runs the scheduled website scans (celery beat → `scraping` queue → scrapy crawl).
+  # Built from the scrapers image because the backend image has no Scrapy/Playwright.
+  # Concurrency 1: one spider at a time, keeps us polite to the portals.
+  scraper_worker:
+    build:
+      context: ./scrapers
+      dockerfile: Dockerfile
+    container_name: re_scraper_worker
+    command: celery -A config worker -Q scraping -c 1 -n scraper@%h -l info
+    working_dir: /app
+    volumes:
+      - ./scrapers:/app
+      - ./backend:/backend
+    env_file: .env
+    environment:
+      PYTHONPATH: /backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Scrapy is run on demand from your host or via:
   #   docker compose run --rm scrapers scrapy crawl domoplius
   scrapers:
@@ -124,15 +150,16 @@ services:
     environment:
       PUBLIC_API_URL: http://localhost:8000/api
 
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: re_mailhog
+  # Dev mail catcher (multi-arch, maintained successor to MailHog)
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: re_mailpit
     ports:
       - "1025:1025"  # SMTP
       - "8025:8025"  # Web UI
 
 volumes:
-  postgres_data:
+  postgres_data_multiarch:
   redis_data:
   nominatim_data:
   nominatim_flatnode:

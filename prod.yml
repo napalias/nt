@@ -4,7 +4,7 @@
 ##   - gunicorn instead of runserver
 ##   - no source mounts
 ##   - multi-stage frontend build
-##   - no mailhog, no nominatim (use external)
+##   - no mailpit, no nominatim (use external)
 
 services:
   postgres:
@@ -57,8 +57,8 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-https://api.example.com}
       NODE_ENV: production
 
-  # Disable mailhog in production
-  mailhog:
+  # Disable mailpit in production
+  mailpit:
     profiles: ["disabled"]
 
   # Disable nominatim in production (use external instance)

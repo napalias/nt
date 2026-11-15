@@ -16,10 +16,16 @@ from scrapy import Spider  # noqa: E402
 from scrapy.exceptions import DropItem  # noqa: E402
 
 from realestate_spiders.items import ListingItem, PermitItem, PlanningItem  # noqa: E402
+from realestate_spiders.lt_address import geocode_queries  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 REQUIRED_FIELDS = ["url", "source", "title", "address", "property_type", "listing_type"]
+
+
+def _count_write(spider: Spider, created: bool) -> None:
+    """New vs updated counts for the run record (ScrapeRunRecorder reads these stats)."""
+    spider.crawler.stats.inc_value("nt/items_new" if created else "nt/items_updated")
 
 
 class ValidatePipeline:
@@ -215,34 +221,34 @@ class GeocodePipeline:
 
         address = self._clean_address(item.get("address", ""))
         city = item.get("city", "")
-        query = f"{address}, {city}" if city and city.lower() not in address.lower() else address
 
-        if not query.strip():
-            self._apply_fallback(item)
-            return item
-
+        # Portals write "Klaipėdos r. sav., Stančiuose" (locative, abbreviated); Nominatim
+        # only matches nominative names, so try normalized queries, most specific first.
         try:
-            resp = requests.get(
-                f"{self.nominatim_url}/search",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "limit": 1,
-                    "countrycodes": "lt",
-                },
-                timeout=5,
-            )
-            resp.raise_for_status()
-            results = resp.json()
-
-            if results:
-                item["latitude"] = float(results[0]["lat"])
-                item["longitude"] = float(results[0]["lon"])
-                logger.debug("Geocoded '%s' → (%s, %s)", query, item["latitude"], item["longitude"])
-                return item
+            for query in geocode_queries(address, city):
+                resp = requests.get(
+                    f"{self.nominatim_url}/search",
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "limit": 1,
+                        "countrycodes": "lt",
+                    },
+                    timeout=5,
+                )
+                resp.raise_for_status()
+                results = resp.json()
+                if results:
+                    item["latitude"] = float(results[0]["lat"])
+                    item["longitude"] = float(results[0]["lon"])
+                    logger.debug(
+                        "Geocoded '%s' via '%s' → (%s, %s)",
+                        address, query, item["latitude"], item["longitude"],
+                    )
+                    return item
 
         except requests.RequestException:
-            logger.warning("Nominatim unavailable for: %s", query)
+            logger.warning("Nominatim unavailable for: %s", address)
 
         self._apply_fallback(item)
         return item
@@ -325,6 +331,7 @@ class DjangoWritePipeline:
             defaults=defaults,
         )
 
+        _count_write(spider, created)
         action = "Created" if created else "Updated"
         logger.info("%s listing %s: %s", action, obj.pk, obj.title[:60])
 
@@ -402,6 +409,7 @@ class PlanningWritePipeline:
             )
             obj.documents.add(doc)
 
+        _count_write(spider, created)
         action = "Created" if created else "Updated"
         logger.info(
             "%s planning document %s: %s (docs: %d)",
@@ -554,6 +562,7 @@ class PermitWritePipeline:
             defaults=defaults,
         )
 
+        _count_write(spider, created)
         action = "Created" if created else "Updated"
         logger.info("%s permit %s: %s", action, obj.pk, obj.permit_number)
 

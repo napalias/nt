@@ -110,6 +110,13 @@ CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://redis:6379/0")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+# Spider tasks shell out to `scrapy`, which only exists in the scrapers image.
+# They go to the `scraping` queue, consumed by the `scraper_worker` compose service.
+CELERY_TASK_ROUTES = {
+    "apps.listings.tasks.run_spider": {"queue": "scraping"},
+    "apps.permits.tasks.run_infostatyba_spider": {"queue": "scraping"},
+    "apps.planning.tasks.scrape_tpdris": {"queue": "scraping"},
+}
 
 # --- App-specific ---
 DEFAULT_SEARCH_RADIUS_M = 5000

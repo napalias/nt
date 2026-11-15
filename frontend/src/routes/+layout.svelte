@@ -10,7 +10,8 @@
         { href: '/finder', label: 'Atranka' },
         { href: '/search', label: 'Paieška' },
         { href: '/searches', label: 'Paieškos' },
-        { href: '/preferences', label: 'Prioritetai' }
+        { href: '/preferences', label: 'Prioritetai' },
+        { href: '/scans', label: 'Nuskaitymai' }
     ];
 </script>
 

@@ -1,0 +1,13 @@
+{
+  "name": "nt",
+  "private": true,
+  "description": "Root task runner for the local Docker stack. No dependencies.",
+  "scripts": {
+    "start": "bash scripts/stack.sh start",
+    "stop": "bash scripts/stack.sh stop",
+    "logs": "bash scripts/stack.sh logs",
+    "status": "bash scripts/stack.sh status",
+    "scrape": "bash scripts/stack.sh scrape",
+    "inspect": "bash scripts/stack.sh inspect"
+  }
+}

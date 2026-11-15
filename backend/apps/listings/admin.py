@@ -1,6 +1,6 @@
 from django.contrib.gis import admin as gis_admin
 
-from apps.listings.models import ExcludedListing, Listing
+from apps.listings.models import ExcludedListing, Listing, ScrapeRun
 
 
 @gis_admin.register(Listing)
@@ -101,3 +101,13 @@ class ExcludedListingAdmin(gis_admin.ModelAdmin):
     search_fields = ["listing__title", "reason"]
     readonly_fields = ["excluded_at"]
     raw_id_fields = ["listing"]
+
+
+@gis_admin.register(ScrapeRun)
+class ScrapeRunAdmin(gis_admin.ModelAdmin):
+    list_display = [
+        "spider", "status", "started_at", "finished_at", "pages_crawled",
+        "items_found", "items_new", "items_updated", "items_dropped", "errors",
+    ]
+    list_filter = ["spider", "status"]
+    readonly_fields = [f.name for f in ScrapeRun._meta.fields]

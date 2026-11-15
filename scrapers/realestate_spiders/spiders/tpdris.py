@@ -62,7 +62,7 @@ class TpdrisSpider(scrapy.Spider):
         self.status = status
         self.current_page = 1
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         url = f"https://www.tpdris.lt/lt/paieska?status={self.status}&page=1"
         yield scrapy.Request(
             url,

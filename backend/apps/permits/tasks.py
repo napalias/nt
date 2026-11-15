@@ -27,7 +27,7 @@ def run_infostatyba_spider(self, max_pages: int = 0) -> str:
     try:
         result = subprocess.run(
             cmd,
-            cwd="/scrapers",
+            cwd="/app",  # scrapers project root inside the scraper_worker container
             capture_output=True,
             text=True,
             timeout=7200,  # 2 hours max

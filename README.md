@@ -22,30 +22,52 @@ AI features:
 ## Quick start
 
 ```bash
-cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
-
-docker compose up -d
-# Wait ~5 min for Nominatim first boot: docker compose logs -f nominatim
-
-# Seed test data
-docker compose exec backend python manage.py migrate
-docker compose exec backend python manage.py seed_listings 20
-
-# Open http://localhost:5173
+pnpm start          # starts Docker if needed, boots every container, migrates, prints URLs
+pnpm stop           # stops every container (data volumes are kept)
+pnpm restart        # stop, then start
+pnpm start --build  # rebuild images first (after Dockerfile / dependency changes)
+pnpm logs           # follow logs of every service
+pnpm status         # list containers
 ```
+
+The first boot builds images and imports Nominatim's Lithuania extract (~5–10 min). `pnpm start` creates `.env` from `.env.example` if it's missing.
+
+Optional fake data: `docker compose exec backend python manage.py seed_listings 20`
 
 ## URLs
 
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:5173 |
+| Scan history | http://localhost:5173/scans |
 | Backend API | http://localhost:8000/api |
 | API docs | http://localhost:8000/api/docs |
 | Admin | http://localhost:8000/admin |
-| MailHog | http://localhost:8025 |
+| Mailpit | http://localhost:8025 |
 
-## Run spiders
+## Scanning websites
+
+Scans run automatically once the stack is up: Celery beat queues them daily (Infostatyba 05:00, Domoplius 06:00, Skelbiu 07:00, Aruodas 08:00, Alio 08:30, TPDRIS Sundays 04:00) and the `scraper_worker` container runs them one at a time. Watch with `pnpm logs scraper_worker`.
+
+Every run is recorded (pages, listings found, new, updated, dropped and why). See them at http://localhost:5173/scans (nav: **Nuskaitymai**). Click a run to see its drop reasons and the new listings it brought in.
+
+Scan on demand:
+
+```bash
+pnpm scrape              # all listing portals, 2 pages each
+pnpm scrape alio 5       # one spider, 5 pages
+```
+
+Map a site before writing or fixing a spider (read-only headless Chromium in the scraper container):
+
+```bash
+pnpm inspect domoplius             # presets: domoplius, skelbiu, aruodas, alio, infostatyba, tpdris
+pnpm inspect https://... --follow 2  # any URL, plus 2 listing-card links
+```
+
+Writes `scrapers/recon/out/<site>-<time>/report.md` (buttons, ids, classes, working selectors, forms, listing-card containers, pagination, XHR/JSON endpoints, bot-challenge flag), `pages.json` and screenshots. Every non-GET request is blocked, so nothing on the site can be submitted.
+
+Raw spider runs:
 
 ```bash
 docker compose run --rm scrapers scrapy crawl domoplius -a max_pages=2

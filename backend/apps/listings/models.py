@@ -138,3 +138,40 @@ class ExcludedListing(models.Model):
 
     def __str__(self) -> str:
         return f"Excluded: {self.listing}"
+
+
+class ScrapeRun(models.Model):
+    """One spider run: what it crawled, found, saved and dropped. Written by the scrapers'
+    ScrapeRunRecorder extension, shown on the /scans page."""
+
+    class Status(models.TextChoices):
+        RUNNING = "running", "Vykdoma"
+        OK = "ok", "Sėkminga"
+        EMPTY = "empty", "Nieko nerasta"
+        BLOCKED = "blocked", "Užblokuota"
+        FAILED = "failed", "Nepavyko"
+
+    spider = models.CharField(max_length=32, db_index=True, verbose_name="Šaltinis")
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.RUNNING, verbose_name="Būsena"
+    )
+    started_at = models.DateTimeField(db_index=True, verbose_name="Pradėta")
+    finished_at = models.DateTimeField(null=True, blank=True, verbose_name="Baigta")
+    finish_reason = models.CharField(max_length=64, blank=True, verbose_name="Pabaigos priežastis")
+    pages_crawled = models.PositiveIntegerField(default=0, verbose_name="Puslapiai")
+    items_found = models.PositiveIntegerField(default=0, verbose_name="Rasta")
+    items_saved = models.PositiveIntegerField(default=0, verbose_name="Išsaugota")
+    items_new = models.PositiveIntegerField(default=0, verbose_name="Nauji")
+    items_updated = models.PositiveIntegerField(default=0, verbose_name="Atnaujinti")
+    items_dropped = models.PositiveIntegerField(default=0, verbose_name="Atmesti")
+    errors = models.PositiveIntegerField(default=0, verbose_name="Klaidos")
+    drop_reasons = models.JSONField(default=dict, blank=True, verbose_name="Atmetimo priežastys")
+    args = models.JSONField(default=dict, blank=True, verbose_name="Argumentai")
+
+    class Meta:
+        verbose_name = "Nuskaitymas"
+        verbose_name_plural = "Nuskaitymai"
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"{self.spider} {self.started_at:%Y-%m-%d %H:%M} ({self.status})"

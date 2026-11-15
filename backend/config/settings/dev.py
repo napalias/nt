@@ -6,7 +6,7 @@ DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "mailhog"
+EMAIL_HOST = "mailpit"
 EMAIL_PORT = 1025
 
 CACHES = {

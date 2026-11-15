@@ -90,7 +90,7 @@ class SkelbiuSpider(scrapy.Spider):
     # Index pages
     # ------------------------------------------------------------------
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         url_template = CATEGORY_URLS.get(self.property_type)
         if not url_template:
             self.logger.error("Unknown property_type: %s", self.property_type)

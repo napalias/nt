@@ -129,7 +129,7 @@ class AruodasSpider(scrapy.Spider):
             },
         }
 
-    def start_requests(self):
+    async def start(self):  # Scrapy >=2.13 entry point; start_requests() is no longer called
         path_template = CATEGORY_PATHS.get(self.property_type)
         if not path_template:
             self.logger.error(

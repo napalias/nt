@@ -50,3 +50,9 @@ htmlcov/
 
 # Playwright
 playwright-browsers/
+
+# Local DB dumps
+backups/
+
+# Site inspector output (screenshots, page maps)
+scrapers/recon/out/
