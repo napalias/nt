@@ -3,7 +3,7 @@
 Pipeline:
 1. Extract text from PDF (pymupdf for text-based, pytesseract for scanned)
 2. Build Claude prompt asking for structured planning facts
-3. Call Anthropic API with tool_use for structured output
+3. Call Anthropic API with structured outputs (JSON schema) for the facts
 4. Save extracted data to PlanningDocument
 
 Usage:
@@ -15,63 +15,69 @@ from __future__ import annotations
 
 import logging
 
-import anthropic
 from django.conf import settings
+
+from apps.classifier import llm
+from apps.classifier.llm import get_client
 
 logger = logging.getLogger(__name__)
 
-EXTRACT_MODEL = "claude-sonnet-4-20250514"
+# Covers adaptive thinking as well as the JSON answer.
+EXTRACT_MAX_TOKENS = 4096
 
-EXTRACT_TOOL = {
-    "name": "extract_planning_facts",
-    "description": "Extract structured facts from a Lithuanian territorial planning document",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "allowed_uses": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": (
-                    "Allowed land uses (e.g. 'residential', 'commercial', "
-                    "'industrial', 'agricultural', 'mixed')"
-                ),
-            },
-            "max_height_m": {
-                "type": "number",
-                "description": "Maximum building height in meters, null if not specified",
-            },
-            "max_floors": {
-                "type": "integer",
-                "description": "Maximum number of floors, null if not specified",
-            },
-            "max_density": {
-                "type": "number",
-                "description": "Maximum building density coefficient, null if not specified",
-            },
-            "parking_requirements": {
-                "type": "string",
-                "description": "Parking requirements as free text, empty if not specified",
-            },
-            "extraction_confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": (
-                    "How confident you are in the extraction (0.0-1.0). "
-                    "Lower if text was unclear, scanned, or partially readable"
-                ),
-            },
-            "key_restrictions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Other notable restrictions or conditions mentioned",
-            },
+# The API enforces types and required keys. Numbers that may be absent are nullable
+# (anyOf with null) and listed in "required" so the model always answers them explicitly.
+# Numeric ranges (confidence 0..1) are checked in extract_facts_from_text.
+EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "allowed_uses": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Allowed land uses (e.g. 'residential', 'commercial', "
+                "'industrial', 'agricultural', 'mixed')"
+            ),
         },
-        "required": [
-            "allowed_uses",
-            "extraction_confidence",
-        ],
+        "max_height_m": {
+            "anyOf": [{"type": "number"}, {"type": "null"}],
+            "description": "Maximum building height in meters, null if not specified",
+        },
+        "max_floors": {
+            "anyOf": [{"type": "integer"}, {"type": "null"}],
+            "description": "Maximum number of floors, null if not specified",
+        },
+        "max_density": {
+            "anyOf": [{"type": "number"}, {"type": "null"}],
+            "description": "Maximum building density coefficient, null if not specified",
+        },
+        "parking_requirements": {
+            "type": "string",
+            "description": "Parking requirements as free text, empty if not specified",
+        },
+        "extraction_confidence": {
+            "type": "number",
+            "description": (
+                "How confident you are in the extraction, from 0.0 to 1.0. "
+                "Lower if text was unclear, scanned, or partially readable"
+            ),
+        },
+        "key_restrictions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Other notable restrictions or conditions mentioned",
+        },
     },
+    "required": [
+        "allowed_uses",
+        "max_height_m",
+        "max_floors",
+        "max_density",
+        "parking_requirements",
+        "extraction_confidence",
+        "key_restrictions",
+    ],
+    "additionalProperties": False,
 }
 
 SYSTEM_PROMPT = """\
@@ -138,16 +144,13 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 def extract_facts_from_text(text: str) -> dict:
     """Send extracted text to Claude and get structured planning facts."""
-    api_key = settings.ANTHROPIC_API_KEY
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY is not set")
-
+    client = get_client()
     truncated = text[:15000]
 
-    client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
-        model=EXTRACT_MODEL,
-        max_tokens=1024,
+    facts = llm.call_structured(
+        client,
+        model=settings.CLAUDE_EVAL_MODEL,
+        max_tokens=EXTRACT_MAX_TOKENS,
         system=[
             {
                 "type": "text",
@@ -155,8 +158,6 @@ def extract_facts_from_text(text: str) -> dict:
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        tools=[EXTRACT_TOOL],
-        tool_choice={"type": "tool", "name": "extract_planning_facts"},
         messages=[
             {
                 "role": "user",
@@ -165,13 +166,18 @@ def extract_facts_from_text(text: str) -> dict:
                 ),
             }
         ],
+        schema=EXTRACT_SCHEMA,
+        purpose="extract_planning_facts",
+        effort=llm.EFFORT_EVAL,
     )
 
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "extract_planning_facts":
-            return block.input
-
-    raise ValueError("No extract_planning_facts tool call in response")
+    llm.require_keys(facts, tuple(EXTRACT_SCHEMA["required"]), "extract_planning_facts")
+    if not isinstance(facts["allowed_uses"], list):
+        raise llm.InvalidOutputError("extract_planning_facts: allowed_uses must be a list")
+    facts["extraction_confidence"] = llm.require_unit_interval(
+        facts["extraction_confidence"], "extraction_confidence"
+    )
+    return facts
 
 
 def extract_planning_facts(planning_doc) -> dict | None:
@@ -202,8 +208,14 @@ def extract_planning_facts(planning_doc) -> dict | None:
 
     try:
         facts = extract_facts_from_text(combined_text)
-    except Exception:
-        logger.exception("LLM extraction failed for planning doc %s", planning_doc.pk)
+    except Exception as exc:
+        logger.error(
+            "LLM extraction failed for planning doc %s: %s: %s",
+            planning_doc.pk,
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
         return None
 
     planning_doc.allowed_uses = facts.get("allowed_uses", [])

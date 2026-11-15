@@ -10,32 +10,44 @@ def classify_new_listings(limit: int = 20):
     """Classify unclassified active listings. Scheduled via celery-beat."""
     from apps.classifier.services import classify_batch
 
-    results = classify_batch(limit=limit)
+    result = classify_batch(limit=limit)
     summary: dict[str, int] = {}
-    for e in results:
+    for e in result.items:
         summary[e.verdict] = summary.get(e.verdict, 0) + 1
-    logger.info("Auto-classified %d listings: %s", len(results), summary)
-    return {"classified": len(results), "by_verdict": summary}
+    logger.info("Auto-classified %d listings: %s", len(result.items), summary)
+    return {
+        "classified": len(result.items),
+        "failed": result.failed,
+        "errors": result.error_counts,
+        "by_verdict": summary,
+    }
 
 
 @shared_task
 def reclassify_all():
     """Re-classify all active listings (e.g. after criteria change)."""
-    from apps.classifier.models import ListingEvaluation
-    from apps.classifier.services import classify_listing
+    from apps.classifier.llm import BatchResult
+    from apps.classifier.services import _get_client, classify_listing
     from apps.listings.models import Listing
 
+    client = _get_client()
     listings = list(Listing.objects.filter(is_active=True))
-    total = 0
+    result = BatchResult()
     for listing in listings:
-        ListingEvaluation.objects.filter(listing=listing).delete()
+        # Keep the old evaluation until the new one is saved: a failed call must not
+        # leave the listing with no evaluation at all.
         try:
-            classify_listing(listing)
-            total += 1
-        except Exception:
-            logger.exception("Failed to reclassify listing %s", listing.pk)
-    logger.info("Re-classified %d / %d listings", total, len(listings))
-    return {"reclassified": total, "total": len(listings)}
+            classify_listing(listing, client=client)
+            result.items.append(listing.pk)
+        except Exception as exc:
+            result.add_failure(exc, context=f"Reclassify listing {listing.pk}")
+    result.log_summary("reclassify_all")
+    return {
+        "reclassified": len(result.items),
+        "failed": result.failed,
+        "errors": result.error_counts,
+        "total": len(listings),
+    }
 
 
 @shared_task
@@ -53,6 +65,10 @@ def cleanup_descriptions(limit: int = 50):
     """Clean marketing fluff from listing descriptions using AI."""
     from apps.classifier.services import cleanup_batch
 
-    count = cleanup_batch(limit=limit)
-    logger.info("Cleaned %d listing descriptions", count)
-    return {"cleaned": count}
+    result = cleanup_batch(limit=limit)
+    logger.info("Cleaned %d listing descriptions", len(result.items))
+    return {
+        "cleaned": len(result.items),
+        "failed": result.failed,
+        "errors": result.error_counts,
+    }

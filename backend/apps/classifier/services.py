@@ -6,6 +6,7 @@ from typing import Any
 import anthropic
 from django.conf import settings
 
+from apps.classifier import llm
 from apps.classifier.models import LearnedPreference, ListingEvaluation, UserFeedback
 from apps.classifier.prompts import (
     LEARNED_PREFERENCES_BLOCK,
@@ -16,104 +17,107 @@ from apps.listings.models import Listing
 
 logger = logging.getLogger(__name__)
 
-CLASSIFY_MODEL = "claude-sonnet-4-20250514"
-EXTRACT_MODEL = "claude-haiku-4-5-20251001"
+# max_tokens has to cover adaptive thinking as well as the answer, so these are
+# deliberately generous. Cost is driven by what the model actually generates, not the cap.
+CLASSIFY_MAX_TOKENS = 4096
+EXTRACT_PREFERENCES_MAX_TOKENS = 2048
+CLEANUP_MAX_TOKENS = 4096
 
-EVALUATE_TOOL = {
-    "name": "evaluate_listing",
-    "description": "Submit a structured evaluation of a real estate listing",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "verdict": {
-                "type": "string",
-                "enum": ["match", "review", "skip"],
-                "description": (
-                    "Overall verdict: match (buy candidate), "
-                    "review (needs closer look), skip (doesn't fit)"
-                ),
-            },
-            "match_score": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "How well the listing matches buyer criteria (0.0-1.0)",
-            },
-            "summary": {
-                "type": "string",
-                "description": "2-3 sentence summary of the evaluation in Lithuanian",
-            },
-            "hard_filter_results": {
-                "type": "object",
-                "properties": {
-                    "price_ok": {"type": "boolean"},
-                    "type_ok": {"type": "boolean"},
-                    "area_ok": {"type": "boolean"},
-                    "plot_ok": {"type": "boolean"},
-                    "location_ok": {"type": "boolean"},
-                },
-                "required": [
-                    "price_ok",
-                    "type_ok",
-                    "area_ok",
-                    "plot_ok",
-                    "location_ok",
-                ],
-            },
-            "quality_notes": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": (
-                    "Observations about listing quality (photos, description completeness, etc.)"
-                ),
-            },
-            "red_flags": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Any suspicious or concerning aspects",
-            },
+VERDICTS = ["match", "review", "skip"]
+MAX_PREFERENCE_PATTERNS = 3
+MIN_PREFERENCE_WEIGHT = 0.5
+MAX_PREFERENCE_WEIGHT = 2.0
+
+# JSON schemas for structured outputs. The API enforces types, enums and required keys;
+# it cannot enforce numeric min/max or array sizes, so those are checked in code below.
+EVALUATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {
+            "type": "string",
+            "enum": VERDICTS,
+            "description": (
+                "Overall verdict: match (buy candidate), "
+                "review (needs closer look), skip (doesn't fit)"
+            ),
         },
-        "required": [
-            "verdict",
-            "match_score",
-            "summary",
-            "hard_filter_results",
-            "quality_notes",
-            "red_flags",
-        ],
+        "match_score": {
+            "type": "number",
+            "description": "How well the listing matches buyer criteria, from 0.0 to 1.0",
+        },
+        "summary": {
+            "type": "string",
+            "description": "2-3 sentence summary of the evaluation in Lithuanian",
+        },
+        "hard_filter_results": {
+            "type": "object",
+            "properties": {
+                "price_ok": {"type": "boolean"},
+                "type_ok": {"type": "boolean"},
+                "area_ok": {"type": "boolean"},
+                "plot_ok": {"type": "boolean"},
+                "location_ok": {"type": "boolean"},
+            },
+            "required": [
+                "price_ok",
+                "type_ok",
+                "area_ok",
+                "plot_ok",
+                "location_ok",
+            ],
+            "additionalProperties": False,
+        },
+        "quality_notes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Observations about listing quality (photos, description completeness, etc.)"
+            ),
+        },
+        "red_flags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Any suspicious or concerning aspects",
+        },
     },
+    "required": [
+        "verdict",
+        "match_score",
+        "summary",
+        "hard_filter_results",
+        "quality_notes",
+        "red_flags",
+    ],
+    "additionalProperties": False,
 }
 
-EXTRACT_PREFERENCE_TOOL = {
-    "name": "extract_preferences",
-    "description": "Extract reusable preference patterns from buyer feedback",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "patterns": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "pattern": {
-                            "type": "string",
-                            "description": "Concise reusable preference pattern",
-                        },
-                        "weight": {
-                            "type": "number",
-                            "minimum": 0.5,
-                            "maximum": 2.0,
-                            "description": ("Importance: 0.5=minor, 1.0=normal, 2.0=strong"),
-                        },
+EXTRACT_PREFERENCES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "patterns": {
+            "type": "array",
+            "description": "1 to 3 reusable preference patterns",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Concise reusable preference pattern",
                     },
-                    "required": ["pattern", "weight"],
+                    "weight": {
+                        "type": "number",
+                        "description": (
+                            "Importance from 0.5 to 2.0: 0.5=minor, 1.0=normal, 2.0=strong"
+                        ),
+                    },
                 },
-                "minItems": 1,
-                "maxItems": 3,
+                "required": ["pattern", "weight"],
+                "additionalProperties": False,
             },
         },
-        "required": ["patterns"],
     },
+    "required": ["patterns"],
+    "additionalProperties": False,
 }
 
 
@@ -196,23 +200,47 @@ def _listing_to_text(listing: Listing) -> str:
 
 
 def _get_client() -> anthropic.Anthropic:
-    api_key = settings.ANTHROPIC_API_KEY
-    if not api_key:
-        raise ValueError(
-            "ANTHROPIC_API_KEY is not set. Add it to your .env file to use AI classification."
-        )
-    return anthropic.Anthropic(api_key=api_key)
+    return llm.get_client()
 
 
-def classify_listing(listing: Listing) -> ListingEvaluation:
+def _validate_evaluation(data: dict) -> dict:
+    """Check what the schema cannot: ranges and exact keys. Raises InvalidOutputError."""
+    purpose = "evaluate_listing"
+    llm.require_keys(data, tuple(EVALUATE_SCHEMA["required"]), purpose)
+    if data["verdict"] not in VERDICTS:
+        raise llm.InvalidOutputError(f"{purpose}: unknown verdict {data['verdict']!r}")
+    score = llm.require_unit_interval(data["match_score"], "match_score")
+    if not isinstance(data["summary"], str):
+        raise llm.InvalidOutputError(f"{purpose}: summary must be text")
+
+    hard_filters = data["hard_filter_results"]
+    expected = EVALUATE_SCHEMA["properties"]["hard_filter_results"]["required"]
+    if not isinstance(hard_filters, dict) or any(
+        not isinstance(hard_filters.get(k), bool) for k in expected
+    ):
+        raise llm.InvalidOutputError(f"{purpose}: hard_filter_results is incomplete")
+
+    for key in ("quality_notes", "red_flags"):
+        value = data[key]
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise llm.InvalidOutputError(f"{purpose}: {key} must be a list of text")
+
+    return {**data, "match_score": score}
+
+
+def classify_listing(
+    listing: Listing, client: anthropic.Anthropic | None = None
+) -> ListingEvaluation:
     """Classify a single listing using Claude and return the evaluation."""
-    client = _get_client()
+    client = client or _get_client()
     system_prompt = _build_system_prompt()
     listing_text = _listing_to_text(listing)
+    model = settings.CLAUDE_EVAL_MODEL
 
-    response = client.messages.create(
-        model=CLASSIFY_MODEL,
-        max_tokens=1024,
+    data = llm.call_structured(
+        client,
+        model=model,
+        max_tokens=CLASSIFY_MAX_TOKENS,
         system=[
             {
                 "type": "text",
@@ -220,28 +248,28 @@ def classify_listing(listing: Listing) -> ListingEvaluation:
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        tools=[EVALUATE_TOOL],
-        tool_choice={"type": "tool", "name": "evaluate_listing"},
         messages=[
             {
                 "role": "user",
                 "content": f"Evaluate this listing:\n\n{listing_text}",
             }
         ],
+        schema=EVALUATE_SCHEMA,
+        purpose="evaluate_listing",
+        effort=llm.EFFORT_EVAL,
     )
-
-    tool_input = _extract_tool_input(response, "evaluate_listing")
+    result = _validate_evaluation(data)
 
     evaluation, _ = ListingEvaluation.objects.update_or_create(
         listing=listing,
         defaults={
-            "verdict": tool_input["verdict"],
-            "match_score": tool_input["match_score"],
-            "summary": tool_input["summary"],
-            "hard_filter_results": tool_input["hard_filter_results"],
-            "quality_notes": tool_input.get("quality_notes", []),
-            "red_flags": tool_input.get("red_flags", []),
-            "model_used": CLASSIFY_MODEL,
+            "verdict": result["verdict"],
+            "match_score": result["match_score"],
+            "summary": result["summary"],
+            "hard_filter_results": result["hard_filter_results"],
+            "quality_notes": result["quality_notes"],
+            "red_flags": result["red_flags"],
+            "model_used": model,
         },
     )
     logger.info(
@@ -253,19 +281,24 @@ def classify_listing(listing: Listing) -> ListingEvaluation:
     return evaluation
 
 
-def classify_batch(queryset: Any | None = None, limit: int = 50) -> list[ListingEvaluation]:
-    """Classify unclassified listings. Returns list of new evaluations."""
+def classify_batch(queryset: Any | None = None, limit: int = 50) -> llm.BatchResult:
+    """Classify unclassified listings.
+
+    Returns a BatchResult: ``items`` are the new evaluations, ``failed`` and ``error_counts``
+    say how many listings errored and why. A missing API key raises immediately (clear
+    ValueError) instead of failing once per listing.
+    """
+    client = _get_client()
     if queryset is None:
         queryset = Listing.objects.filter(is_active=True, evaluation__isnull=True)
-    listings = queryset[:limit]
-    results = []
-    for listing in listings:
+    result = llm.BatchResult()
+    for listing in queryset[:limit]:
         try:
-            evaluation = classify_listing(listing)
-            results.append(evaluation)
-        except Exception:
-            logger.exception("Failed to classify listing %s", listing.pk)
-    return results
+            result.items.append(classify_listing(listing, client=client))
+        except Exception as exc:
+            result.add_failure(exc, context=f"Classify listing {listing.pk}")
+    result.log_summary("classify_batch")
+    return result
 
 
 def process_feedback(
@@ -282,6 +315,27 @@ def process_feedback(
     return feedback, preferences
 
 
+def _validate_patterns(data: dict) -> list[tuple[str, float]]:
+    purpose = "extract_preferences"
+    llm.require_keys(data, ("patterns",), purpose)
+    patterns = data["patterns"]
+    if not isinstance(patterns, list) or not patterns:
+        raise llm.InvalidOutputError(f"{purpose}: no patterns returned")
+
+    cleaned = []
+    for p in patterns[:MAX_PREFERENCE_PATTERNS]:
+        text = p.get("pattern") if isinstance(p, dict) else None
+        weight = p.get("weight") if isinstance(p, dict) else None
+        if not isinstance(text, str) or not text.strip():
+            raise llm.InvalidOutputError(f"{purpose}: pattern must be non-empty text")
+        if isinstance(weight, bool) or not isinstance(weight, int | float):
+            raise llm.InvalidOutputError(f"{purpose}: weight must be a number")
+        # Weight is advisory, so clamp rather than reject.
+        weight = min(max(float(weight), MIN_PREFERENCE_WEIGHT), MAX_PREFERENCE_WEIGHT)
+        cleaned.append((text.strip(), weight))
+    return cleaned
+
+
 def extract_preferences(feedback: UserFeedback) -> list[LearnedPreference]:
     """Use Claude to extract reusable preference patterns from feedback."""
     client = _get_client()
@@ -296,82 +350,79 @@ def extract_preferences(feedback: UserFeedback) -> list[LearnedPreference]:
         listing_summary=listing_text,
     )
 
-    response = client.messages.create(
-        model=EXTRACT_MODEL,
-        max_tokens=512,
-        tools=[EXTRACT_PREFERENCE_TOOL],
-        tool_choice={"type": "tool", "name": "extract_preferences"},
+    data = llm.call_structured(
+        client,
+        model=settings.CLAUDE_FAST_MODEL,
+        max_tokens=EXTRACT_PREFERENCES_MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
+        schema=EXTRACT_PREFERENCES_SCHEMA,
+        purpose="extract_preferences",
+        effort=llm.EFFORT_FAST,
     )
+    patterns = _validate_patterns(data)
 
-    tool_input = _extract_tool_input(response, "extract_preferences")
     created = []
-    for p in tool_input["patterns"]:
+    for pattern, weight in patterns:
         pref = LearnedPreference.objects.create(
             preference_type=feedback.feedback_type,
-            pattern=p["pattern"],
-            weight=p.get("weight", 1.0),
+            pattern=pattern,
+            weight=weight,
             source_feedback=feedback,
         )
         created.append(pref)
         logger.info(
             "Extracted preference: [%s] %s (weight=%.1f)",
             feedback.feedback_type,
-            p["pattern"],
-            p.get("weight", 1.0),
+            pattern,
+            weight,
         )
 
     return created
 
 
-def cleanup_description(listing: Listing) -> str:
-    """Remove marketing fluff from a listing description using Claude."""
+def cleanup_description(listing: Listing, client: anthropic.Anthropic | None = None) -> str:
+    """Remove marketing fluff from a listing description using Claude.
+
+    The description is only overwritten with complete, non-empty model output: a truncated
+    or empty reply raises and leaves the stored description untouched.
+    """
     from apps.classifier.prompts import CLEANUP_PROMPT
 
     if not listing.description or len(listing.description) < 20:
         return listing.description or ""
 
-    api_key = settings.ANTHROPIC_API_KEY
-    if not api_key:
-        return listing.description
-
-    client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
+    client = client or _get_client()
+    cleaned = llm.call_text(
+        client,
+        model=settings.CLAUDE_FAST_MODEL,
+        max_tokens=CLEANUP_MAX_TOKENS,
         system=CLEANUP_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": listing.description[:3000],
-            }
-        ],
+        messages=[{"role": "user", "content": listing.description[:3000]}],
+        purpose="cleanup_description",
+        effort=llm.EFFORT_FAST,
     )
-    cleaned = response.content[0].text.strip()
     listing.description = cleaned
     listing.save(update_fields=["description"])
     logger.info("Cleaned description for listing %s", listing.pk)
     return cleaned
 
 
-def cleanup_batch(limit: int = 50) -> int:
-    """Clean up descriptions for listings that haven't been cleaned yet."""
+def cleanup_batch(limit: int = 50) -> llm.BatchResult:
+    """Clean up descriptions for listings that haven't been cleaned yet.
+
+    ``items`` holds the ids of cleaned listings; failures are counted and logged.
+    """
+    client = _get_client()
     uncleaned = Listing.objects.filter(
         is_active=True,
         description__regex=r"(!{2,}|SKUBIAI|PUIKI INVESTICIJA|Nepraleiskite)",
     )[:limit]
-    count = 0
+    result = llm.BatchResult()
     for listing in uncleaned:
         try:
-            cleanup_description(listing)
-            count += 1
-        except Exception:
-            logger.exception("Failed to cleanup listing %s", listing.pk)
-    return count
-
-
-def _extract_tool_input(response: anthropic.types.Message, tool_name: str) -> dict:
-    for block in response.content:
-        if block.type == "tool_use" and block.name == tool_name:
-            return block.input
-    raise ValueError(f"No {tool_name} tool call found in response")
+            cleanup_description(listing, client=client)
+            result.items.append(listing.pk)
+        except Exception as exc:
+            result.add_failure(exc, context=f"Cleanup listing {listing.pk}")
+    result.log_summary("cleanup_batch")
+    return result

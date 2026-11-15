@@ -11,40 +11,37 @@ from __future__ import annotations
 
 import logging
 
-import anthropic
 from django.conf import settings
 from django.contrib.gis.measure import D
 
+from apps.classifier import llm
+from apps.classifier.llm import get_client
 from apps.classifier.models import ListingCluster
 from apps.listings.models import Listing
 
 logger = logging.getLogger(__name__)
 
-DEDUP_MODEL = "claude-haiku-4-5-20251001"
+# Covers adaptive thinking as well as the short answer.
+COMPARE_MAX_TOKENS = 1024
 
-COMPARE_TOOL = {
-    "name": "compare_listings",
-    "description": "Decide if two real estate listings are the same property",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "is_same": {
-                "type": "boolean",
-                "description": "True if both listings describe the same physical property",
-            },
-            "confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "How confident you are (0.0-1.0)",
-            },
-            "reasoning": {
-                "type": "string",
-                "description": "Brief explanation of why they match or don't",
-            },
+COMPARE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_same": {
+            "type": "boolean",
+            "description": "True if both listings describe the same physical property",
         },
-        "required": ["is_same", "confidence", "reasoning"],
+        "confidence": {
+            "type": "number",
+            "description": "How confident you are, from 0.0 to 1.0",
+        },
+        "reasoning": {
+            "type": "string",
+            "description": "Brief explanation of why they match or don't",
+        },
     },
+    "required": ["is_same", "confidence", "reasoning"],
+    "additionalProperties": False,
 }
 
 COMPARE_PROMPT = """\
@@ -136,12 +133,10 @@ def find_candidates(radius_m: int = 50) -> list[tuple[Listing, Listing]]:
 
 def compare_pair(listing_a: Listing, listing_b: Listing) -> dict:
     """Ask Claude whether two listings are the same property."""
-    api_key = settings.ANTHROPIC_API_KEY
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY is not set")
+    return _compare_pair(get_client(), listing_a, listing_b)
 
-    client = anthropic.Anthropic(api_key=api_key)
 
+def _compare_pair(client, listing_a: Listing, listing_b: Listing) -> dict:
     prompt = COMPARE_PROMPT.format(
         source_a=listing_a.source,
         listing_a=_listing_summary(listing_a),
@@ -149,36 +144,42 @@ def compare_pair(listing_a: Listing, listing_b: Listing) -> dict:
         listing_b=_listing_summary(listing_b),
     )
 
-    response = client.messages.create(
-        model=DEDUP_MODEL,
-        max_tokens=256,
-        tools=[COMPARE_TOOL],
-        tool_choice={"type": "tool", "name": "compare_listings"},
+    data = llm.call_structured(
+        client,
+        model=settings.CLAUDE_FAST_MODEL,
+        max_tokens=COMPARE_MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
+        schema=COMPARE_SCHEMA,
+        purpose="compare_listings",
+        effort=llm.EFFORT_FAST,
     )
 
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "compare_listings":
-            return block.input
-
-    raise ValueError("No compare_listings tool call in response")
+    llm.require_keys(data, tuple(COMPARE_SCHEMA["required"]), "compare_listings")
+    if not isinstance(data["is_same"], bool):
+        raise llm.InvalidOutputError("compare_listings: is_same must be true or false")
+    if not isinstance(data["reasoning"], str):
+        raise llm.InvalidOutputError("compare_listings: reasoning must be text")
+    data["confidence"] = llm.require_unit_interval(data["confidence"], "confidence")
+    return data
 
 
 def run_dedup(radius_m: int = 50, min_confidence: float = 0.7) -> list[ListingCluster]:
-    """Full dedup run: find candidates, compare via AI, create clusters."""
+    """Full dedup run: find candidates, compare via AI, create clusters.
+
+    Comparison failures do not stop the run; they are counted and logged at the end.
+    """
     candidates = find_candidates(radius_m=radius_m)
     created_clusters = []
+    outcome = llm.BatchResult()
+    client = get_client() if candidates else None
 
     for listing_a, listing_b in candidates:
         try:
-            result = compare_pair(listing_a, listing_b)
-        except Exception:
-            logger.exception(
-                "Failed to compare listings %s and %s",
-                listing_a.pk,
-                listing_b.pk,
-            )
+            result = _compare_pair(client, listing_a, listing_b)
+        except Exception as exc:
+            outcome.add_failure(exc, context=f"Compare listings {listing_a.pk}/{listing_b.pk}")
             continue
+        outcome.items.append((listing_a.pk, listing_b.pk))
 
         if not result["is_same"] or result["confidence"] < min_confidence:
             logger.debug(
@@ -225,6 +226,7 @@ def run_dedup(radius_m: int = 50, min_confidence: float = 0.7) -> list[ListingCl
             result["reasoning"][:80],
         )
 
+    outcome.log_summary("dedup comparisons")
     logger.info("Dedup complete: %d new clusters created", len(created_clusters))
     return created_clusters
 
