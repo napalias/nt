@@ -113,7 +113,7 @@ scrape() {
   for spider in "${spiders[@]}"; do
     step "Scanning $spider (max $pages pages)"
     if ! docker compose exec -T scraper_worker scrapy crawl "$spider" -a max_pages="$pages" \
-      -s HTTPCACHE_ENABLED=false -s LOG_LEVEL=INFO; then
+      -s LOG_LEVEL=INFO; then
       failed+=("$spider")
     fi
   done

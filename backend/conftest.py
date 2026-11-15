@@ -10,3 +10,9 @@ def kretinga_point():
 @pytest.fixture
 def vilnius_point():
     return Point(25.2797, 54.6872, srid=4326)
+
+
+@pytest.fixture(autouse=True)
+def notify_recipient(settings):
+    """Digest emails need a recipient. Tests use a placeholder, never a real address."""
+    settings.NOTIFY_EMAIL = "digest@example.test"

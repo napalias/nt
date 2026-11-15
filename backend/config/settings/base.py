@@ -120,6 +120,8 @@ CELERY_TASK_ROUTES = {
 
 # --- App-specific ---
 DEFAULT_SEARCH_RADIUS_M = 5000
+# Saved-search digest recipient. Empty means digest emails are skipped.
+NOTIFY_EMAIL = env("NOTIFY_EMAIL", default="")
 NOMINATIM_URL = env("NOMINATIM_URL", default="http://nominatim:8080")
 
 # --- AI Classification ---

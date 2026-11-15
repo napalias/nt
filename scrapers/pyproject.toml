@@ -12,7 +12,6 @@ dependencies = [
     "scrapy-playwright>=0.0.42",
     "playwright>=1.47",
     "curl-cffi>=0.7",
-    "fake-useragent>=1.5",
     # Reuse Django models for the write pipeline:
     "django>=5.0,<6.0",
     "psycopg[binary]>=3.2",

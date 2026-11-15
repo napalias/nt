@@ -87,6 +87,15 @@ class TestScrapeRunsApi:
         data = Client().get("/api/scrapes/runs", {"spider": "domoplius"}).json()
         assert [r["spider"] for r in data] == ["domoplius"]
 
+    def test_runs_limit_is_clamped_to_1_to_500(self):
+        for minutes in range(1, 502):
+            _run("domoplius", minutes)
+        # A negative limit used to slice with a negative index and answer 500.
+        assert len(Client().get("/api/scrapes/runs", {"limit": -5}).json()) == 1
+        assert len(Client().get("/api/scrapes/runs", {"limit": 0}).json()) == 1
+        assert len(Client().get("/api/scrapes/runs", {"limit": 10_000}).json()) == 500
+        assert len(Client().get("/api/scrapes/runs", {"limit": 7}).json()) == 7
+
     def test_summary_has_every_spider_even_never_run(self):
         _run("domoplius", 60, status=ScrapeRun.Status.OK, items_new=4)
         _run("domoplius", 30, status=ScrapeRun.Status.EMPTY)
