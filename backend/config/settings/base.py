@@ -131,6 +131,26 @@ CLAUDE_EVAL_MODEL = env("CLAUDE_EVAL_MODEL", default="claude-sonnet-5-5")
 # Cleanup, preference extraction and the dedup fallback.
 CLAUDE_FAST_MODEL = env("CLAUDE_FAST_MODEL", default="claude-haiku-5-5")
 
+# --- Jev (TypeSafe System One) judgment layer: apps/classifier/judge.py ---
+# off: today's path, Jev is never called. shadow: the current decider decides, Jev is asked
+# too and both are logged. on: Jev decides when its probability clears the question's
+# threshold, otherwise the fallback decides. TYPESAFE_API_KEY is read from os.environ at
+# call time, never from settings.
+JEV_MODE = env("JEV_MODE", default="off")
+# A versioned ID. Aliases (jev-latest, jev-preview) move between releases and shift
+# confidence, so judge.py refuses them.
+JEV_MODEL = env("JEV_MODEL", default="jev-1.14.0")
+# Per-HTTP-operation timeout, and retries after the first attempt. The worst case for one
+# request is about (1 + retries) x timeout plus a short backoff, then the fallback decides.
+JEV_TIMEOUT_S = env.float("JEV_TIMEOUT_S", default=10.0)
+JEV_MAX_RETRIES = env.int("JEV_MAX_RETRIES", default=1)
+# Yes/no questions: Jev decides "yes" at P(yes) >= yes and "no" at P(yes) <= no.
+# Choice and score questions: Jev decides when its top option has P >= min_probability.
+JEV_DEFAULT_THRESHOLD = {"yes": 0.90, "no": 0.10, "min_probability": 0.90}
+# Per-question overrides keyed by question name, e.g. {"same_property": {"yes": 0.95}}.
+# Missing keys inherit JEV_DEFAULT_THRESHOLD.
+JEV_THRESHOLDS: dict[str, dict[str, float]] = {}
+
 # --- Rate limiting ---
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_VIEW_RATE = "60/m"  # default fallback rate

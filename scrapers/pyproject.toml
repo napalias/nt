@@ -22,6 +22,8 @@ dependencies = [
     "django-ratelimit>=4.1",
     "owslib>=0.32",
     "anthropic>=0.40",
+    # Ingest screens call the backend's Jev judgment layer (apps/classifier/judge.py).
+    "typesafe-sdk>=0.7.5,<0.8",
     "requests>=2.32",
     # scraper_worker runs the backend's Celery app to consume the `scraping` queue:
     "celery[redis]>=5.4",
