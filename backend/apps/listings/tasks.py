@@ -8,6 +8,8 @@ import requests
 from celery import shared_task
 from django.conf import settings
 
+from apps.listings.sources import Source, Target, crawl_command, get_source
+
 logger = logging.getLogger(__name__)
 
 STALE_MARKERS = ["nebepasiekiamas", "skelbimas nerastas", "pašalintas iš sąrašo"]
@@ -16,31 +18,63 @@ BACKUP_DIR = Path("/app/backups")
 
 
 @shared_task
-def run_spider(name: str, max_pages: int = 0) -> dict:
-    """Run a Scrapy spider by name. Designed to be triggered from celery-beat."""
-    cmd = ["scrapy", "crawl", name]
-    if max_pages:
-        cmd.extend(["-a", f"max_pages={max_pages}"])
+def run_spider(name: str, property_type: str | None = None, **spider_args: object) -> dict:
+    """Run one registry source (see apps/listings/sources.py). Triggered from celery-beat.
 
+    Spider args, delay and timeout come from the registry; keyword args here override
+    registry spider args (e.g. `run_spider("domoplius", max_pages=1)`). With no
+    `property_type`, every target switched on in settings.SCAN_PROPERTY_TYPES runs, one
+    crawl (and one ScrapeRun) each. Runs on the scraper worker, scrapers project at /app.
+    """
+    source = get_source(name)
+    if not source.built:
+        raise ValueError(f"Source {name!r} is registered but its spider is not built yet")
+    if property_type is None:
+        targets = source.active_targets(settings.SCAN_PROPERTY_TYPES)
+    else:
+        targets = (source.target(property_type),)
+
+    if not targets:
+        logger.warning(
+            "Source %s has no target for SCAN_PROPERTY_TYPES=%s; nothing to crawl",
+            name,
+            settings.SCAN_PROPERTY_TYPES,
+        )
+    crawls = [_crawl(source, target, spider_args) for target in targets]
+    return {"spider": name, "crawls": crawls}
+
+
+def _crawl(source: Source, target: Target, overrides: dict[str, object]) -> dict:
+    cmd = crawl_command(source, target, overrides)
     logger.info("Starting spider: %s", " ".join(cmd))
-
-    result = subprocess.run(
-        cmd,
-        cwd="/app",
-        capture_output=True,
-        text=True,
-        timeout=3600,
-    )
+    report: dict = {"property_type": target.property_type, "timed_out": False}
+    try:
+        result = subprocess.run(
+            cmd, cwd="/app", capture_output=True, text=True, timeout=source.timeout_s
+        )
+    except subprocess.TimeoutExpired:
+        # The killed crawl never closes its ScrapeRun; the recorder marks it interrupted
+        # on a later run once it is STALE_AFTER_H old.
+        logger.error("Spider %s timed out after %d s", source.spider, source.timeout_s)
+        return {
+            **report,
+            "timed_out": True,
+            "exit_code": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+        }
 
     if result.returncode != 0:
         logger.error(
-            "Spider %s failed (exit %d): %s", name, result.returncode, result.stderr[-500:]
+            "Spider %s failed (exit %d): %s",
+            source.spider,
+            result.returncode,
+            result.stderr[-500:],
         )
     else:
-        logger.info("Spider %s completed successfully", name)
-
+        logger.info("Spider %s completed successfully", source.spider)
     return {
-        "spider": name,
+        **report,
         "exit_code": result.returncode,
         "stdout_tail": result.stdout[-200:] if result.stdout else "",
         "stderr_tail": result.stderr[-200:] if result.stderr else "",

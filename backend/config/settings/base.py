@@ -110,16 +110,17 @@ CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://redis:6379/0")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
-# Spider tasks shell out to `scrapy`, which only exists in the scrapers image.
-# They go to the `scraping` queue, consumed by the `scraper_worker` compose service.
+# run_spider shells out to `scrapy`, which only exists in the scrapers image.
+# It goes to the `scraping` queue, consumed by the `scraper_worker` compose service.
 CELERY_TASK_ROUTES = {
     "apps.listings.tasks.run_spider": {"queue": "scraping"},
-    "apps.permits.tasks.run_infostatyba_spider": {"queue": "scraping"},
-    "apps.planning.tasks.scrape_tpdris": {"queue": "scraping"},
 }
 
 # --- App-specific ---
 DEFAULT_SEARCH_RADIUS_M = 5000
+# Which listing targets of the source registry (apps/listings/sources.py) scheduled scans
+# run. Listing.PropertyType values, comma-separated in the env. Scope: houses for sale.
+SCAN_PROPERTY_TYPES = env.list("SCAN_PROPERTY_TYPES", default=["house"])
 # Saved-search digest recipient. Empty means digest emails are skipped.
 NOTIFY_EMAIL = env("NOTIFY_EMAIL", default="")
 NOMINATIM_URL = env("NOMINATIM_URL", default="http://nominatim:8080")
