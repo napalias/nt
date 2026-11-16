@@ -148,9 +148,18 @@ JEV_MAX_RETRIES = env.int("JEV_MAX_RETRIES", default=1)
 # Yes/no questions: Jev decides "yes" at P(yes) >= yes and "no" at P(yes) <= no.
 # Choice and score questions: Jev decides when its top option has P >= min_probability.
 JEV_DEFAULT_THRESHOLD = {"yes": 0.90, "no": 0.10, "min_probability": 0.90}
+# Dedup's "same property?" question (apps/classifier/dedup.py). P(same) between the two bounds
+# is the grey band: Claude decides. At or above the high bound, or at or below the low one,
+# Jev decides (JEV_MODE=on); in shadow Claude always decides and Jev is only logged.
+DEDUP_GREY_BAND_LOW = env.float("DEDUP_GREY_BAND_LOW", default=0.2)
+DEDUP_GREY_BAND_HIGH = env.float("DEDUP_GREY_BAND_HIGH", default=0.8)
+# Most pairs one dedup run sends to a judge. Pairs already judged do not count.
+DEDUP_MAX_PAIRS_PER_RUN = env.int("DEDUP_MAX_PAIRS_PER_RUN", default=200)
 # Per-question overrides keyed by question name, e.g. {"same_property": {"yes": 0.95}}.
 # Missing keys inherit JEV_DEFAULT_THRESHOLD.
-JEV_THRESHOLDS: dict[str, dict[str, float]] = {}
+JEV_THRESHOLDS: dict[str, dict[str, float]] = {
+    "same_property": {"yes": DEDUP_GREY_BAND_HIGH, "no": DEDUP_GREY_BAND_LOW},
+}
 
 # --- Rate limiting ---
 RATELIMIT_USE_CACHE = "default"

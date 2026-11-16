@@ -9,6 +9,7 @@ from django.utils import timezone
 from ninja import Router, Schema
 
 from apps.listings.models import Listing, ScrapeRun
+from apps.listings.notify import open_problems
 from apps.listings.sources import SOURCES, Kind
 
 router = Router(tags=["scrapes"])
@@ -17,18 +18,40 @@ router = Router(tags=["scrapes"])
 class ScrapeRunOut(Schema):
     id: int
     spider: str
-    status: str
+    status: str  # running | ok | partial | empty | blocked | failed
+    trigger: str  # beat | manual
     started_at: datetime
     finished_at: datetime | None
     finish_reason: str
+    args: dict[str, str]
+    start_url: str
     pages_crawled: int
+    links_seen: int
     items_found: int
     items_saved: int
     items_new: int
     items_updated: int
+    items_unchanged: int
     items_dropped: int
     errors: int
     drop_reasons: dict[str, int]
+    block_kind: str  # "" or captcha | challenge | login | robots | forbidden | rate_limited
+    needs_human: bool
+    notified_at: datetime | None
+
+
+class ScrapeRunDetailOut(ScrapeRunOut):
+    log_tail: str
+
+
+class AttentionOut(Schema):
+    spider: str
+    label: str  # from the source registry
+    problem: str  # needs_human | blocked | failed | empty_twice | partial
+    severity: str  # error (e-mailed) | warning (listed only)
+    what_to_do: str
+    notified_at: datetime | None
+    run: ScrapeRunOut  # the last finished run, which shows the problem
 
 
 class SpiderSummaryOut(Schema):
@@ -95,6 +118,29 @@ def summary(request):
             "new_7d": listings.filter(first_seen_at__gte=week_ago).count() if is_listing else None,
         })
     return rows
+
+
+@router.get("/attention", response=list[AttentionOut])
+def attention(request):
+    """Open scan problems, one per source, with what a person should do about each."""
+    return [
+        {
+            "spider": p.source.spider,
+            "label": p.label,
+            "problem": p.kind.value,
+            "severity": p.severity,
+            "what_to_do": p.what_to_do,
+            "notified_at": p.run.notified_at,
+            "run": p.run,
+        }
+        for p in open_problems()
+    ]
+
+
+@router.get("/runs/{run_id}", response=ScrapeRunDetailOut)
+def run_detail(request, run_id: int):
+    """One run with its log tail (kept for runs started by run_spider)."""
+    return get_object_or_404(ScrapeRun, pk=run_id)
 
 
 @router.get("/runs/{run_id}/new", response=list[NewListingOut])

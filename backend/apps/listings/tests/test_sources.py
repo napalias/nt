@@ -51,8 +51,8 @@ FETCH_MODES = {
     "aruodas": FetchMode.PLAYWRIGHT,
     "realu": FetchMode.PLAIN,
     "domoplius": FetchMode.PLAIN,
-    "alio": FetchMode.PLAYWRIGHT,
-    "skelbiu": FetchMode.PLAYWRIGHT,
+    "alio": FetchMode.CURL_CFFI,
+    "skelbiu": FetchMode.CURL_CFFI,
     "rasknt": FetchMode.PLAIN,
     "capital": FetchMode.PLAIN,
     "meguvosbustas": FetchMode.PLAIN,
@@ -182,14 +182,20 @@ class TestScheduling:
         assert {s.spider for s in scheduled_sources()} == {s.spider for s in SOURCES if s.enabled}
         assert all(s.state == State.SCHEDULED for s in scheduled_sources())
 
-    def test_blocked_and_national_only_spiders_are_paused(self):
+    def test_blocked_spider_is_paused(self):
         # aruodas: PerimeterX + robots disallow, human-assisted only (#15).
-        # skelbiu: spider has no Kretinga filter yet (#12).
-        for spider in ("aruodas", "skelbiu"):
+        source = get_source("aruodas")
+        assert source.built and not source.enabled
+        assert source.state == State.PAUSED
+        assert source.note
+
+    def test_alio_and_skelbiu_are_back_on_the_schedule(self):
+        # repaired in #12: Kretinga-only URLs, listing-link patterns from recon
+        for spider in ("alio", "skelbiu"):
             source = get_source(spider)
-            assert source.built and not source.enabled
-            assert source.state == State.PAUSED
-            assert source.note
+            assert source.built and source.enabled
+            assert source.state == State.SCHEDULED
+            assert source.fetch_mode == FetchMode.CURL_CFFI
 
     def test_tpdris_runs_weekly(self):
         assert get_source("tpdris").schedule == Schedule(hour=4, minute=0, day_of_week="sun")
