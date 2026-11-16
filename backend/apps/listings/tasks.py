@@ -387,10 +387,16 @@ def _judge_page(listing_id: int, source_url: str, page: _Page) -> str:
         return Listing.CheckResult.GONE
     if page.status != 200:
         return Listing.CheckResult.ERROR  # 5xx, odd 3xx/4xx: says nothing about the ad
+    if moved:
+        # A redirect gets the one question that also sees where the request ended up
+        # (ad_is_gone), not page_expired as well: one Jev call per page, not two.
+        if any(marker in page.text.lower() for marker in STALE_MARKERS):
+            return Listing.CheckResult.STALE
+        if _ad_is_gone(listing_id, source_url, page):
+            return Listing.CheckResult.STALE
+        return Listing.CheckResult.OK
     # The markers decide with JEV_MODE off; Jev reads the page in shadow (logged) and on.
     if ingest.page_expired(listing_id, page.text, STALE_MARKERS):
-        return Listing.CheckResult.STALE
-    if moved and _ad_is_gone(listing_id, source_url, page):
         return Listing.CheckResult.STALE
     return Listing.CheckResult.OK
 

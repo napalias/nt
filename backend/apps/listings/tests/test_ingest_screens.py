@@ -37,7 +37,8 @@ def listing_with_page(body):
         address_raw="Kretinga",
         source_url="https://example.invalid/skelbimas/1",
     )
-    response = MagicMock(status_code=200, text=body)
+    # The page answered at the URL asked for: not a redirect (that path asks ad_is_gone instead).
+    response = MagicMock(status_code=200, text=body, url=listing.source_url)
     return listing, response
 
 
