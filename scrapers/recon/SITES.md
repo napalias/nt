@@ -130,6 +130,21 @@ on the image, title and button, so a spider has to read the onclick or build the
 detail URLs `/skelbimas/<id>-<slug>.html`. It is a local classifieds board and the category mixes ad
 types (page 1 had building materials), so the house-ad filter is needed.
 
+**Spider built (#14, 2026-11-16).** The category has sub-categories (`/skelbimai/nekilnojamas-turtas/namai`,
+`.../sodybos`, ...). The spider starts at `namai` (12 ads, one page, no pager) and `sodybos` instead of the
+nine mixed pages, and still filters (the `namai` page held an energy-certificate ad, concrete work and a
+"wanted" ad). The poster's phone, email and name sit in the description's signature and in `div.sk_contacts`;
+the spider reads only that block's `Vietove` tag.
+
+**Other agency spiders (#14), measured the same day.**
+- meguvosbustas: 3 pages, 27 objects, 3 Kretinga houses on page 1. The firewall answers 403 to `%20` in the
+  card hrefs (`/parduodami-namai/Kretingos r./...`) and 200 to `+`; the spider sends `+`.
+- pamario-nt: the Kretinga houses URL still redirects to the one house. The multi-object list shape was
+  taken from the Klaipeda houses page (`a.paieska_nt_inline`, "Rasti: N objektai"); no paging scheme seen.
+- ntseptynetas: no spider. `/wp-json/wp/v2/types` lists only `post` and `page`; there is no listing page.
+- alginosnt: `/search?itemType=namas&region=25` is the Kretingos r. filter (3 houses); the text search
+  `search=Kretinga` also returns Kretingale (Klaipeda district). Pages are `&page=N`.
+
 ## Starting-table cells now resolved
 
 | Site | Was | Is |

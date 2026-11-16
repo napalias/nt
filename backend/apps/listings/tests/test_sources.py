@@ -38,11 +38,7 @@ NOT_BUILT = {
     "realu",
     "capital",
     "rasknt",
-    "meguvosbustas",
-    "pamario-nt",
-    "ntseptynetas",
-    "alginosnt",
-    "kretingosskelbimai",
+    "ntseptynetas",  # no listings on the site (#14): a note in the registry, no spider
 }
 
 # Issue #6 starting table: fetch mode per site; pamario-nt and ntseptynetas honour a
@@ -155,6 +151,33 @@ class TestKretingaHousesScope:
     def test_unknown_property_type_is_rejected(self):
         with pytest.raises(ValueError, match="bogus"):
             get_source("domoplius").active_targets(["bogus"])
+
+
+class TestLocalAgencySources:
+    """#14: the five small local sources."""
+
+    @pytest.mark.parametrize(
+        "spider", ["meguvosbustas", "pamario-nt", "alginosnt", "kretingosskelbimai"]
+    )
+    def test_agency_spiders_are_built_and_scheduled(self, spider):
+        source = get_source(spider)
+        assert source.built and source.enabled
+        assert source.state == State.SCHEDULED
+        assert source.fetch_mode == FetchMode.PLAIN
+
+    def test_ntseptynetas_has_no_spider_because_the_site_has_no_listings(self):
+        source = get_source("ntseptynetas")
+        assert source.state == State.NOT_BUILT
+        assert "no property listings" in source.note.lower()
+
+    def test_alginosnt_starts_at_the_district_filter_not_the_text_search(self):
+        # "search=Kretinga" also returns Kretingale (Klaipeda district); region=25 is Kretingos r.
+        (url,) = get_source("alginosnt").start_urls
+        assert "region=25" in url and "search=" not in url
+
+    def test_kretingosskelbimai_starts_at_house_sub_categories(self):
+        urls = get_source("kretingosskelbimai").start_urls
+        assert [u.rsplit("/", 1)[1] for u in urls] == ["namai", "sodybos"]
 
 
 class TestScheduling:
