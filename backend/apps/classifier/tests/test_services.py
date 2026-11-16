@@ -19,6 +19,7 @@ from apps.classifier.services import (
 )
 from apps.classifier.tests.helpers import (
     CLASSIFY_PAYLOAD,
+    NARRATIVE_PAYLOAD,
     PREFERENCES_PAYLOAD,
     make_client,
     make_response,
@@ -29,6 +30,7 @@ KRETINGA = Point(21.2420, 55.8835, srid=4326)
 
 
 def _listing(**kwargs):
+    kwargs.setdefault("property_type", Listing.PropertyType.HOUSE)
     kwargs.setdefault("location", KRETINGA)
     kwargs.setdefault("address_raw", "Test")
     return baker.make(Listing, **kwargs)
@@ -143,7 +145,14 @@ class TestBuildSystemPrompt:
 
 
 @pytest.mark.django_db
-class TestClassifyListing:
+class TestFullEvaluationInShadowMode:
+    """The old single-call Claude evaluation. It runs, and is saved, only in shadow mode.
+    The pipeline that runs otherwise is covered in test_evaluation.py."""
+
+    @pytest.fixture(autouse=True)
+    def shadow(self, settings):
+        settings.JEV_MODE = "shadow"
+
     @patch("apps.classifier.services._get_client")
     def test_classify_creates_evaluation(self, mock_get_client):
         mock_get_client.return_value = make_client(make_response(CLASSIFY_PAYLOAD))
@@ -227,7 +236,7 @@ class TestClassifyListing:
 class TestClassifyBatch:
     @patch("apps.classifier.services._get_client")
     def test_batch_classifies_unclassified_only(self, mock_get_client):
-        mock_get_client.return_value = make_client(make_response(CLASSIFY_PAYLOAD))
+        mock_get_client.return_value = make_client(make_response(NARRATIVE_PAYLOAD))
 
         already_done = _listing(is_active=True, address_raw="Done")
         ListingEvaluation.objects.create(
@@ -246,7 +255,7 @@ class TestClassifyBatch:
 
     @patch("apps.classifier.services._get_client")
     def test_batch_skips_inactive(self, mock_get_client):
-        mock_get_client.return_value = make_client(make_response(CLASSIFY_PAYLOAD))
+        mock_get_client.return_value = make_client(make_response(NARRATIVE_PAYLOAD))
 
         _listing(is_active=False, address_raw="Inactive")
         results = classify_batch(limit=10)
@@ -254,7 +263,7 @@ class TestClassifyBatch:
 
     @patch("apps.classifier.services._get_client")
     def test_batch_respects_limit(self, mock_get_client):
-        mock_get_client.return_value = make_client(make_response(CLASSIFY_PAYLOAD))
+        mock_get_client.return_value = make_client(make_response(NARRATIVE_PAYLOAD))
 
         for i in range(5):
             _listing(is_active=True, address_raw=f"L{i}")
@@ -263,8 +272,8 @@ class TestClassifyBatch:
 
     @patch("apps.classifier.services._get_client")
     def test_failures_are_counted_logged_and_do_not_stop_the_batch(self, mock_get_client, caplog):
-        good = make_response(CLASSIFY_PAYLOAD)
-        truncated = make_response(CLASSIFY_PAYLOAD, stop_reason="max_tokens")
+        good = make_response(NARRATIVE_PAYLOAD)
+        truncated = make_response(NARRATIVE_PAYLOAD, stop_reason="max_tokens")
         mock_get_client.return_value = make_client(good, truncated, good)
         for i in range(3):
             _listing(is_active=True, address_raw=f"L{i}")

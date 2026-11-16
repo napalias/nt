@@ -2,24 +2,25 @@
 
 You ARE the AI evaluator. Read unclassified listings from the database, evaluate each one against the buyer's criteria, and save your evaluations back.
 
-## Buyer's criteria (from memory + CLAUDE.md)
+## Buyer's criteria
 
-- **Budget**: Target ~200,000 EUR, max 250,000 EUR
-- **Type**: New build preferred. "Namo dalis" (part of house) = always skip
-- **Living area**: 100 kv.m preferred, acceptable 95–120 kv.m
-- **Plot size**: 10 arų preferred, acceptable 8–12 arų
-- **Location**: Kretinga city, Dupulčiai, Klonaičiai, Jakubavai, Jokūbavas, Raguviškiai, Kartena, Kiauleikiai, Girkaliai, Vydmantai
-- **Preferences**: large plots (10+ arų), geothermal heating, avoid main road noise, prefer real photos over renders
+The criteria live in one place, `backend/apps/classifier/criteria.py` (the human-readable source is `HOUSE_CRITERIA.md`). Do not work from memory or from a copy: print them first and apply exactly what it prints.
+
+```bash
+docker compose exec backend python -m apps.classifier.criteria
+```
+
+A value missing from a listing is **unknown, not a fail**. Only a known value outside a limit is a hard fail.
 
 ## Steps
 
-1. **Get unclassified listings**:
+1. **Print the criteria** (above), then **get unclassified listings**:
    ```bash
    docker compose exec backend python manage.py dump_unclassified --limit 10
    ```
 
 2. **For each listing**, evaluate:
-   - Does it pass hard filters (price, area, location)?
+   - Hard filters (price, area, plot, location, new build, part of a house), in that order. Stop at the first hard fail: verdict `skip`, score 0.0-0.2.
    - Quality check (photos, description, cadastral number)
    - Red flags (too-good price, vague, missing details)
    - Overall match score 0.0-1.0
@@ -34,13 +35,13 @@ You ARE the AI evaluator. Read unclassified listings from the database, evaluate
 ## Verdict guide
 
 - **match** (0.8-1.0): Meets all criteria, worth viewing
-- **review** (0.4-0.8): Partial match, some deviations
-- **skip** (0.0-0.4): Doesn't match criteria
+- **review** (0.4-0.8): Nothing fails, but something is unknown or only partly fits
+- **skip** (0.0-0.2): A hard filter fails
 
 ## Example
 
 ```bash
 docker compose exec backend python manage.py save_evaluation \
   --listing-id 50 --verdict review --score 0.6 \
-  --summary "Namas Kretingoje, sena statyba bet gera kaina ir didelis sklypas. Reikia remonto."
+  --summary "Naujas namas, kaina ir plotas tinka, sklypo dydis nenurodytas. Reikia patikslinti."
 ```

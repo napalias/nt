@@ -8,12 +8,12 @@ from django.test import Client
 from model_bakery import baker
 
 from apps.classifier.models import LearnedPreference, ListingEvaluation, UserFeedback
-from apps.classifier.tests.helpers import CLASSIFY_PAYLOAD, make_response
+from apps.classifier.tests.helpers import NARRATIVE_PAYLOAD, make_response
 from apps.listings.models import Listing
 
 
 def _make_mock_classify_response():
-    return make_response({**CLASSIFY_PAYLOAD, "summary": "Puikus namas."})
+    return make_response({**NARRATIVE_PAYLOAD, "summary": "Puikus namas."})
 
 
 def _make_mock_extract_response():
@@ -32,6 +32,9 @@ def listing():
         title="Test namas",
         price=Decimal("200000"),
         area_sqm=Decimal("100"),
+        plot_area_ares=Decimal("10"),
+        property_type=Listing.PropertyType.HOUSE,
+        is_new_construction=True,
         location=Point(21.2420, 55.8835, srid=4326),
         address_raw="Kretinga",
         city="Kretinga",
@@ -50,7 +53,8 @@ class TestClassifyEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["verdict"] == "match"
-        assert data["match_score"] == 0.85
+        assert 0.8 <= data["match_score"] <= 1.0
+        assert data["summary"] == "Puikus namas."
         assert data["listing_id"] == listing.pk
 
     def test_classify_nonexistent_listing(self, api_client):
@@ -67,6 +71,7 @@ class TestClassifyEndpoint:
             baker.make(
                 Listing,
                 is_active=True,
+                property_type=Listing.PropertyType.HOUSE,
                 location=Point(21.2420, 55.8835, srid=4326),
                 address_raw=f"Test {i}",
             )
@@ -90,6 +95,7 @@ class TestClassifyEndpoint:
         baker.make(
             Listing,
             is_active=True,
+            property_type=Listing.PropertyType.HOUSE,
             location=Point(21.2420, 55.8835, srid=4326),
             address_raw="Test",
         )

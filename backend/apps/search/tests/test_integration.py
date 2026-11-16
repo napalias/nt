@@ -23,7 +23,7 @@ from model_bakery import baker
 
 from apps.cadastre.models import HeritageObject, SpecialLandUseCondition
 from apps.classifier.models import ListingEvaluation
-from apps.classifier.tests.helpers import CLASSIFY_PAYLOAD, make_response
+from apps.classifier.tests.helpers import NARRATIVE_PAYLOAD, make_response
 from apps.developers.models import Developer
 from apps.listings.models import ExcludedListing, Listing
 from apps.permits.models import BuildingPermit
@@ -46,20 +46,9 @@ def _make_small_polygon(lng: float, lat: float, size: float = 0.001) -> MultiPol
     return mpoly
 
 
-def _make_mock_classify_response(
-    verdict: str = "match",
-    match_score: float = 0.85,
-    summary: str = "Puikus namas.",
-):
-    return make_response(
-        {
-            **CLASSIFY_PAYLOAD,
-            "verdict": verdict,
-            "match_score": match_score,
-            "summary": summary,
-            "quality_notes": ["Good condition"],
-        }
-    )
+def _make_mock_classify_response(summary: str = "Puikus namas."):
+    """The Claude narrative. Verdict and score come from code, not from this answer."""
+    return make_response({**NARRATIVE_PAYLOAD, "summary": summary, "quality_notes": ["Good"]})
 
 
 def _make_mock_extract_response():
@@ -78,7 +67,8 @@ def _make_kretinga_listing(**overrides) -> Listing:
         "property_type": Listing.PropertyType.HOUSE,
         "listing_type": Listing.ListingType.SALE,
         "is_active": True,
-        "is_new_construction": False,
+        "plot_area_ares": Decimal("10"),
+        "is_new_construction": True,
         "city": "Kretinga",
         "address_raw": "Kretinga centras",
         "location": Point(KRETINGA_LNG, KRETINGA_LAT, srid=4326),
@@ -219,7 +209,7 @@ class TestClassifyToEvaluate:
         assert resp.status_code == 200
         classify_data = resp.json()
         assert classify_data["verdict"] == "match"
-        assert classify_data["match_score"] == 0.85
+        assert 0.8 <= classify_data["match_score"] <= 1.0
         assert classify_data["listing_id"] == listing.pk
 
         # Verify it shows in /evaluated
@@ -229,28 +219,23 @@ class TestClassifyToEvaluate:
         assert len(eval_data) == 1
         assert eval_data[0]["listing_id"] == listing.pk
         assert eval_data[0]["verdict"] == "match"
-        assert eval_data[0]["match_score"] == 0.85
+        assert eval_data[0]["match_score"] == classify_data["match_score"]
         assert eval_data[0]["summary"] == "Puikus namas."
 
     @patch("apps.classifier.services._get_client")
     def test_classify_then_filter_by_verdict(self, mock_get_client, api_client):
         """Filtering /evaluated by verdict works after classification."""
         mock_client = MagicMock()
+        mock_client.messages.create.return_value = _make_mock_classify_response()
         mock_get_client.return_value = mock_client
 
-        # Classify listing1 as match
         listing1 = _make_kretinga_listing(title="Match namas")
-        mock_client.messages.create.return_value = _make_mock_classify_response(
-            verdict="match", match_score=0.9
-        )
         api_client.post(f"/api/classifier/classify/{listing1.pk}")
 
-        # Classify listing2 as skip
-        listing2 = _make_kretinga_listing(title="Skip namas")
-        mock_client.messages.create.return_value = _make_mock_classify_response(
-            verdict="skip", match_score=0.2, summary="Netinka."
-        )
+        # Over budget: a hard fail, skipped in code with no Claude call.
+        listing2 = _make_kretinga_listing(title="Skip namas", price=Decimal("400000"))
         api_client.post(f"/api/classifier/classify/{listing2.pk}")
+        assert mock_client.messages.create.call_count == 1
 
         # Filter by verdict=match
         resp = api_client.get("/api/classifier/evaluated?verdict=match")
@@ -268,16 +253,13 @@ class TestClassifyToEvaluate:
     def test_classify_then_filter_by_min_score(self, mock_get_client, api_client):
         """min_score filter on /evaluated works correctly."""
         mock_client = MagicMock()
+        mock_client.messages.create.return_value = _make_mock_classify_response()
         mock_get_client.return_value = mock_client
 
         listing = _make_kretinga_listing(title="High score")
-        mock_client.messages.create.return_value = _make_mock_classify_response(match_score=0.95)
         api_client.post(f"/api/classifier/classify/{listing.pk}")
 
-        low_listing = _make_kretinga_listing(title="Low score")
-        mock_client.messages.create.return_value = _make_mock_classify_response(
-            verdict="skip", match_score=0.1, summary="Bad"
-        )
+        low_listing = _make_kretinga_listing(title="Low score", area_sqm=Decimal("40"))
         api_client.post(f"/api/classifier/classify/{low_listing.pk}")
 
         resp = api_client.get("/api/classifier/evaluated?min_score=0.5")
