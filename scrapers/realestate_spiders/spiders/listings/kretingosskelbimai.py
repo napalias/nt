@@ -5,8 +5,9 @@ work, energy certificates and "wanted" ads. The registry therefore starts at the
 `Namai` (houses) and `Sodybos` (farmsteads) sub-categories, and this spider keeps only ads that
 read as a house for sale (`is_house_for_sale`: a sale word, a house word, none of the rent,
 wanted, service or materials words). Everything else is counted as seen and skipped. The same
-check runs again on the full text at the detail page. A model screen can come later; this is the
-cheap code filter.
+check runs again on the full text at the detail page. With JEV_MODE shadow or on, a detail page
+this filter rejects still becomes an item and JevScreenPipeline asks Jev "is this a house for
+sale?" (apps/classifier/ingest.py); off, the page is skipped as before.
 
 The page has no structured address. The title (or the first sentence) usually names the place in
 the locative ("... namas Guobu aklg., Kretingoje"), which the geocoder turns back into a
@@ -120,8 +121,10 @@ class KretingosskelbimaiSpider(ListingSpider):
         raw = re.sub(r'<span class="price">.*?</span></span>', "", raw, flags=re.DOTALL)
         lines = [re.sub(r"<[^>]+>", "", part) for part in re.split(r"<br\s*/?>", raw)]
         text = "\n".join(lines)
-        if not is_house_for_sale(title, text):
-            self.logger.info("Not a house for sale, skipped: %s", response.url)
+        # With JEV_MODE off a "no" skips the page; in shadow and on it still becomes an item
+        # that JevScreenPipeline judges.
+        house_ad = is_house_for_sale(title, text)
+        if not house_ad and not self.defer_house_check(response, "not a house for sale"):
             return
 
         tag = response.xpath(
@@ -152,6 +155,7 @@ class KretingosskelbimaiSpider(ListingSpider):
                 "location_tag": tag.strip(),
             },
             scraped_at=datetime.now(UTC).isoformat(),
+            _house_ad_heuristic=house_ad,
         )
         yield item
 

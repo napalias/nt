@@ -9,14 +9,23 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from apps.listings.blocks import BlockKind, classify_response, stat_key
-from scrapy import Request, Spider, signals
-from scrapy.crawler import Crawler
-from scrapy.exceptions import IgnoreRequest
-from scrapy.http import Response, TextResponse
-from scrapy.statscollectors import StatsCollector
+import django_setup
+
+# The wall question reads settings.JEV_MODE, so Django settings must be configured.
+django_setup.setup()
+
+from apps.classifier import ingest  # noqa: E402
+from apps.listings.blocks import BlockKind, classify_response, stat_key  # noqa: E402
+from scrapy import Request, Spider, signals  # noqa: E402
+from scrapy.crawler import Crawler  # noqa: E402
+from scrapy.exceptions import IgnoreRequest  # noqa: E402
+from scrapy.http import Response, TextResponse  # noqa: E402
+from scrapy.statscollectors import StatsCollector  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# Most short 200 pages one crawl puts to Jev as a wall question (JEV_MODE shadow or on).
+MAX_WALL_CHECKS = 30
 
 ROBOTS_MESSAGE = "robots.txt"  # RobotsTxtMiddleware: IgnoreRequest("Forbidden by robots.txt")
 
@@ -32,10 +41,27 @@ class BlockDetectionMiddleware:
     def __init__(self, stats: StatsCollector) -> None:
         self.stats = stats
         self.warned: set[BlockKind] = set()
+        self.wall_checks = 0
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> BlockDetectionMiddleware:
         return cls(crawler.stats)
+
+    def _judge_wall(self, response: Response, text: str) -> BlockKind | None:
+        """Ask Jev about a short 200 page the code markers did not recognise (#18).
+
+        Only with JEV_MODE shadow or on, only for pages with almost nothing to read, and at
+        most MAX_WALL_CHECKS a crawl. Shadow logs Jev's answer beside the code's ("no wall");
+        only `on` returns a kind. The call blocks the reactor for up to the Jev timeout, which
+        is why it is rationed.
+        """
+        if not ingest.screens_active() or not ingest.looks_ambiguous(text):
+            return None
+        if self.wall_checks >= MAX_WALL_CHECKS:
+            return None
+        self.wall_checks += 1
+        self.stats.inc_value("nt/wall_judged")
+        return ingest.judge_wall(response.url, text)
 
     def _record(self, kind: BlockKind, url: str) -> None:
         self.stats.inc_value(stat_key(kind))
@@ -47,6 +73,8 @@ class BlockDetectionMiddleware:
         text = response.text if isinstance(response, TextResponse) else None
         redirected = bool(request.meta.get("redirect_urls"))
         kind = classify_response(response.status, response.url, text, redirected)
+        if kind is None and response.status == 200 and text is not None:
+            kind = self._judge_wall(response, text)
         if kind is not None:
             self._record(kind, response.url)
         return response

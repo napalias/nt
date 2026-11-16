@@ -128,17 +128,23 @@ class SkelbiuSpider(ListingSpider):
             return
 
         crumbs = response.css("ol.breadcrumbs a::attr(href)").getall()
+        # Whether this reads as a house for sale. With JEV_MODE off a "no" skips the page; in
+        # shadow and on it still becomes an item that JevScreenPipeline judges (the scan area
+        # stays a hard skip: it is a place, not a kind of ad).
+        house_ad = True
         if HOUSE_CATEGORY not in crumbs:
-            self._skip(response, "not in the Namai category")
-            return
+            if not self.defer_house_check(response, "not in the Namai category"):
+                return
+            house_ad = False
         location = " ".join(response.css(".cities-name::text").get("").split())
         if not self._in_scan_area(location):
             self._skip(response, f"outside the scan area ({location or 'no location'})")
             return
         price_box = " ".join(response.css(".price-container ::text").getall())
         if "mėn" in price_box.lower():
-            self._skip(response, "priced per month (rent)")
-            return
+            if not self.defer_house_check(response, "priced per month (rent)"):
+                return
+            house_ad = False
 
         details = self._details(response)
         by_field = {field: details.get(label, "") for field, label in DETAIL_LABELS.items()}
@@ -171,6 +177,7 @@ class SkelbiuSpider(ListingSpider):
                 "price_per_sqm": " ".join(response.css(".price-for-unit::text").get("").split()),
             },
             scraped_at=datetime.now(UTC).isoformat(),
+            _house_ad_heuristic=house_ad,
         )
         if ENERGY_CLASS.match(by_field["energy"]):
             item["energy_class"] = by_field["energy"]

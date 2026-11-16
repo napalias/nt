@@ -30,6 +30,7 @@ from typing import NamedTuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import scrapy
+from apps.classifier import ingest
 from apps.listings.sources import get_source
 from scrapy.http import Request, Response
 
@@ -64,6 +65,23 @@ class ListingSpider(scrapy.Spider):
     def parse_detail(self, response: Response):
         """Turn one listing page into items."""
         raise NotImplementedError
+
+    def defer_house_check(self, response: Response, reason: str) -> bool:
+        """Where a mixed-feed spider's code filter says "not a house for sale": whether to
+        build the item anyway and let the judge decide.
+
+        JEV_MODE=off: no. The page is counted in `nt/details_skipped` and skipped, as always.
+        shadow and on: yes. The caller yields the item with `_house_ad_heuristic=False`;
+        JevScreenPipeline asks Jev, logs both answers, and drops the item unless Jev (on)
+        says it is a house for sale after all. The page is already fetched, so this costs no
+        request. Hard filters (the scan area, say) stay skips: only house-ness is judged.
+        """
+        if ingest.screens_active():
+            self.logger.info("Kept for the judge %s: %s", response.url, reason)
+            return True
+        self.logger.info("Skipping %s: %s", response.url, reason)
+        self.crawler.stats.inc_value("nt/details_skipped")
+        return False
 
     def has_next_page(self, response: Response) -> bool:
         """Whether index page `response` can have a successor. The default is yes (the walk then

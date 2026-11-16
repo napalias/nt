@@ -72,6 +72,9 @@ ITEM_PIPELINES: dict[str, int] = {
     # Listing pipelines (skip non-ListingItem automatically)
     # Scrub first: no contact data may reach validation, hashing, logs or the database.
     "realestate_spiders.pipelines.ScrubPipeline": 50,
+    # Jev's screens (house ad, new build) next: before validation, so a non-house ad is
+    # dropped for what it is. A no-op while JEV_MODE=off.
+    "realestate_spiders.pipelines.JevScreenPipeline": 60,
     "realestate_spiders.pipelines.ValidatePipeline": 100,
     "realestate_spiders.pipelines.NormalizePipeline": 200,
     "realestate_spiders.pipelines.GeocodePipeline": 300,

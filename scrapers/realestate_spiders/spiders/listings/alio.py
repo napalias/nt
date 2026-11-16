@@ -104,8 +104,10 @@ class AlioSpider(ListingSpider):
         if not source_id or not title:
             self.logger.warning("Not a listing page: %s", response.url)
             return
-        if not self._is_house_for_sale(response):
-            self._skip(response, "not a house for sale")
+        # With JEV_MODE off a "no" skips the page; in shadow and on it still becomes an item
+        # that JevScreenPipeline judges.
+        house_ad = self._is_house_for_sale(response)
+        if not house_ad and not self.defer_house_check(response, "not a house for sale"):
             return
 
         facts = self._facts(response)
@@ -139,6 +141,7 @@ class AlioSpider(ListingSpider):
                 "price_per_sqm": " ".join(response.css(".av2-price__sub::text").get("").split()),
             },
             scraped_at=datetime.now(UTC).isoformat(),
+            _house_ad_heuristic=house_ad,
         )
         if ENERGY_CLASS.match(by_field["energy"]):
             item["energy_class"] = by_field["energy"]
@@ -154,10 +157,6 @@ class AlioSpider(ListingSpider):
         yield item
 
     # --- helpers -------------------------------------------------------------------
-    def _skip(self, response: Response, reason: str) -> None:
-        self.logger.info("Skipping %s: %s", response.url, reason)
-        self.crawler.stats.inc_value("nt/details_skipped")
-
     def _is_house_for_sale(self, response: Response) -> bool:
         """Breadcrumbs (JSON-LD) say what the ad is. Without them the ad is not trusted."""
         for raw in response.css('script[type="application/ld+json"]::text').getall():

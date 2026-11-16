@@ -559,7 +559,8 @@ class TestRedirectedPages:
         listing.refresh_from_db()
         assert listing.is_active is True
 
-    def test_unmoved_page_is_not_sent_to_jev(self, get, settings, monkeypatch):
+    def test_unmoved_page_is_not_asked_ad_is_gone(self, get, settings, monkeypatch):
+        # An unmoved 200 page gets #18's page_expired question, never the redirect question.
         settings.JEV_MODE = "on"
         settings.JEV_MODEL = "jev-1.14.0"
         fake = _FakeJev(0.99)
@@ -568,7 +569,7 @@ class TestRedirectedPages:
 
         check_listing_validity(batch_size=10)
 
-        assert fake.calls == []
+        assert all("ad_is_gone" not in call["questions"] for call in fake.calls)
 
     def test_trailing_slash_and_query_are_not_a_move(self, get, settings, monkeypatch):
         settings.JEV_MODE = "on"
@@ -580,7 +581,7 @@ class TestRedirectedPages:
 
         check_listing_validity(batch_size=10)
 
-        assert fake.calls == []
+        assert all("ad_is_gone" not in call["questions"] for call in fake.calls)
 
 
 @pytest.mark.django_db

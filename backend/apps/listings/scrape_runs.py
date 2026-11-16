@@ -26,6 +26,8 @@ RUN_ID_SETTING = "NT_SCRAPE_RUN_ID"
 
 # A run that saved items but dropped more than this share of what it found is partial.
 MAX_DROPPED_SHARE = 0.3
+# Counted by the scrapers' JevScreenPipeline for each ad it drops as "not a house for sale".
+SCREENED_STAT = "nt/items_screened"
 
 
 def clip_start_url(url: str) -> str:
@@ -75,7 +77,12 @@ def summarize_stats(stats: Mapping) -> dict:
     errors = stats.get("log_count/ERROR", 0)
     finish_reason = stats.get("finish_reason", "")
     block_kind = block_kind_from_stats(stats)
-    dropped_too_many = found > 0 and dropped / found > MAX_DROPPED_SHARE
+    # Ads a screen turned away on purpose (not a house for sale) are drops with a reason on the
+    # /scans page, but they are what a mixed feed is supposed to lose: they do not make a run
+    # partial. Only the drops that mean trouble (missing fields, geocoding) count here.
+    trouble = max(0, dropped - stats.get(SCREENED_STAT, 0))
+    trouble_found = saved + trouble
+    dropped_too_many = trouble_found > 0 and trouble / trouble_found > MAX_DROPPED_SHARE
     crashed = finish_reason != "finished" and finish_reason not in FINISH_REASON_KINDS
 
     if crashed:
