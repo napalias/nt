@@ -23,7 +23,7 @@ class TestSummarizeStats:
             "log_count/ERROR": 1,
         }
         out = summarize_stats(stats)
-        assert out["status"] == ScrapeRun.Status.OK
+        assert out["status"] == ScrapeRun.Status.PARTIAL  # saved, but logged an error (#8)
         assert out["pages_crawled"] == 22
         assert out["items_found"] == 22  # saved + dropped: everything the spider extracted
         assert out["items_saved"] == 20

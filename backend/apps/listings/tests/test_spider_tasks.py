@@ -5,6 +5,7 @@ The backend image has no Scrapy, so they are routed to a dedicated `scraping` qu
 consumed by `scraper_worker`, where the scrapers project is mounted at /app.
 """
 
+import dataclasses
 import importlib
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -12,8 +13,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.conf import settings as django_settings
 
-from apps.listings.tasks import run_spider
+from apps.listings.models import ScrapeRun
+from apps.listings.sources import get_source
+from apps.listings.tasks import LOG_TAIL_CHARS, LOG_TAIL_LINES, run_spider
 from config.celery import app as celery_app
+
+# run_spider writes the ScrapeRun row itself (#8), so every crawl test needs the database.
+pytestmark = pytest.mark.django_db
+
+PHONE = "+370 600 00001"  # fake
 
 LEGACY_TASKS = (
     "apps.permits.tasks.run_infostatyba_spider",
@@ -140,3 +148,135 @@ def test_timed_out_crawl_is_reported_not_raised() -> None:
         result = run_spider("domoplius")
     assert result["crawls"][0]["timed_out"] is True
     assert result["crawls"][0]["exit_code"] is None
+
+
+# --- ScrapeRun v2 (#8): run_spider owns the row, so beat runs keep their log -------------
+
+
+def _crawl_cmd(run: MagicMock) -> list[str]:
+    return run.call_args.args[0]
+
+
+class TestRunRow:
+    def test_creates_the_row_and_hands_its_id_to_the_crawl(self) -> None:
+        with patch("subprocess.run", return_value=_done()) as run:
+            result = run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.spider == "domoplius"
+        assert row.trigger == ScrapeRun.Trigger.MANUAL
+        assert row.args == {
+            "property_type": "namai",
+            "region": "kretinga",
+            "max_pages": "10",
+            "target": "house",
+        }
+        assert row.start_url.startswith("https://domoplius.lt/")
+        assert _crawl_cmd(run)[-2:] == ["-s", f"NT_SCRAPE_RUN_ID={row.pk}"]
+        assert result["crawls"][0]["run_id"] == row.pk
+
+    def test_beat_trigger_is_recorded_and_not_sent_to_the_spider(self) -> None:
+        with patch("subprocess.run", return_value=_done()) as run:
+            run_spider("domoplius", trigger="beat")
+        assert ScrapeRun.objects.get().trigger == ScrapeRun.Trigger.BEAT
+        assert not any(pair.startswith("trigger=") for pair in _a_args(_crawl_cmd(run)))
+
+    def test_unknown_trigger_fails(self) -> None:
+        with patch("subprocess.run") as run, pytest.raises(ValueError, match="cron"):
+            run_spider("domoplius", trigger="cron")
+        run.assert_not_called()
+        assert not ScrapeRun.objects.exists()
+
+    def test_one_row_per_target_crawl(self, settings) -> None:
+        settings.SCAN_PROPERTY_TYPES = ["house"]
+        with patch("subprocess.run", return_value=_done()):
+            run_spider("domoplius")
+        assert ScrapeRun.objects.count() == 1
+
+    def test_log_tail_is_kept_scrubbed_and_capped(self) -> None:
+        lines = [f"2026-11-15 INFO: line {i}" for i in range(1000)]
+        lines.append(f"WARNING: Dropped item, contact {PHONE} or info@example.test")
+        done = MagicMock(returncode=0, stdout="", stderr="\n".join(lines))
+        with patch("subprocess.run", return_value=done):
+            run_spider("domoplius")
+        tail = ScrapeRun.objects.get().log_tail
+        assert tail.splitlines()[-1].startswith("WARNING: Dropped item")
+        assert "line 999" in tail
+        assert "line 0\n" not in tail
+        assert len(tail.splitlines()) <= LOG_TAIL_LINES
+        assert len(tail) <= LOG_TAIL_CHARS
+        assert PHONE not in tail
+        assert "info@example.test" not in tail
+
+    def test_one_huge_line_is_capped_too(self) -> None:
+        done = MagicMock(returncode=0, stdout="", stderr="x" * (LOG_TAIL_CHARS * 3))
+        with patch("subprocess.run", return_value=done):
+            run_spider("domoplius")
+        assert len(ScrapeRun.objects.get().log_tail) <= LOG_TAIL_CHARS
+
+    def test_row_closed_by_the_recorder_keeps_its_status(self) -> None:
+        def crawl(cmd: list[str], **kwargs: object) -> MagicMock:
+            # What ScrapeRunRecorder does inside the crawl process.
+            ScrapeRun.objects.update(status=ScrapeRun.Status.OK, finish_reason="finished")
+            return MagicMock(returncode=0, stdout="", stderr="INFO: Spider closed (finished)")
+
+        with patch("subprocess.run", side_effect=crawl):
+            run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.status == ScrapeRun.Status.OK
+        assert row.finish_reason == "finished"
+        assert row.log_tail == "INFO: Spider closed (finished)"
+
+    def test_crash_before_the_recorder_closed_the_row_is_failed(self) -> None:
+        failed = MagicMock(returncode=1, stdout="", stderr="Traceback ... KeyError: 'boom'")
+        with patch("subprocess.run", return_value=failed):
+            run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.status == ScrapeRun.Status.FAILED
+        assert row.finish_reason == "exit 1"
+        assert row.finished_at is not None
+        assert "KeyError" in row.log_tail
+
+    def test_clean_exit_that_never_closed_the_row_is_failed_unrecorded(self) -> None:
+        with patch("subprocess.run", return_value=_done()):
+            run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.status == ScrapeRun.Status.FAILED
+        assert row.finish_reason == "unrecorded"
+
+    def test_timeout_is_failed_now_with_the_partial_log(self) -> None:
+        timeout = subprocess.TimeoutExpired(
+            cmd=["scrapy"], timeout=3600, output=b"", stderr=b"INFO: Crawled 3 pages"
+        )
+        with patch("subprocess.run", side_effect=timeout):
+            run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.status == ScrapeRun.Status.FAILED
+        assert row.finish_reason == "timeout"
+        assert row.finished_at is not None
+        assert row.log_tail == "INFO: Crawled 3 pages"
+
+    def test_crawl_that_cannot_start_is_failed_and_raised(self) -> None:
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError("scrapy")),
+            pytest.raises(FileNotFoundError),
+        ):
+            run_spider("domoplius")
+        row = ScrapeRun.objects.get()
+        assert row.status == ScrapeRun.Status.FAILED
+        assert row.finish_reason == "error: FileNotFoundError"
+        assert row.finished_at is not None
+
+    def test_long_start_url_is_cut_to_the_column(self, settings) -> None:
+        settings.SCAN_PROPERTY_TYPES = ["house"]
+        source = get_source("domoplius")
+        long_url = "https://domoplius.lt/skelbimai?q=" + "a" * 1000
+        target = dataclasses.replace(source.target("house"), start_urls=(long_url,))
+        with (
+            patch(
+                "apps.listings.tasks.get_source",
+                return_value=dataclasses.replace(source, targets=(target,)),
+            ),
+            patch("subprocess.run", return_value=_done()),
+        ):
+            run_spider("domoplius")
+        assert ScrapeRun.objects.get().start_url == long_url[: ScrapeRun.START_URL_MAX_LENGTH]

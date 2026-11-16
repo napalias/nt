@@ -55,6 +55,17 @@ PLAYWRIGHT_BROWSER_TYPE = "chromium"
 PLAYWRIGHT_LAUNCH_OPTIONS = {"headless": True}
 
 # ---------------------------------------------------------------------------
+# Block detection: challenge/captcha/login pages (also HTTP 200 ones), 401/403/429 and
+# robots-forbidden start URLs become nt/block/* stats, read into ScrapeRun by the recorder.
+# 585: process_response runs from high to low order, so this sees decoded HTML (after
+# HttpCompressionMiddleware, 590), a meta-refresh page before MetaRefreshMiddleware (580)
+# follows it, and every 429 before RetryMiddleware (550) retries it.
+# ---------------------------------------------------------------------------
+DOWNLOADER_MIDDLEWARES = {
+    "realestate_spiders.middlewares.BlockDetectionMiddleware": 585,
+}
+
+# ---------------------------------------------------------------------------
 # Item pipelines — added as they are implemented
 # ---------------------------------------------------------------------------
 ITEM_PIPELINES: dict[str, int] = {
