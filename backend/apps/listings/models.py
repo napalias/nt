@@ -32,6 +32,13 @@ class Listing(models.Model):
         FRAME = "frame", "Karkasinis"
         OTHER = "other", "Kita"
 
+    class CheckResult(models.TextChoices):
+        OK = "ok", "Dar galioja"
+        GONE = "gone", "Pašalintas (404/410)"
+        STALE = "stale", "Nebegalioja"
+        BLOCKED = "blocked", "Užblokuota"
+        ERROR = "error", "Klaida"
+
     # --- Source tracking ---
     source = models.CharField(max_length=32, db_index=True, verbose_name="Šaltinis")
     source_url = models.URLField(max_length=500, verbose_name="Šaltinio nuoroda")
@@ -120,6 +127,15 @@ class Listing(models.Model):
     last_seen_at = models.DateTimeField(auto_now=True, verbose_name="Paskutinis pastebėjimas")
     scraped_at = models.DateTimeField(verbose_name="Nuskaityta")
     is_active = models.BooleanField(default=True, db_index=True, verbose_name="Aktyvus")
+    # The validity checker (tasks.check_listing_validity) stamps both on every attempt, so
+    # it rotates through all active listings: never-checked first, then the longest ago.
+    # The result says what the attempt found; "blocked" and "error" are not a verification.
+    last_checked_at = models.DateTimeField(
+        null=True, blank=True, db_index=True, verbose_name="Paskutinį kartą tikrinta"
+    )
+    last_check_result = models.CharField(
+        max_length=8, choices=CheckResult.choices, blank=True, verbose_name="Patikros rezultatas"
+    )
 
     # --- Raw data ---
     raw_data = models.JSONField(default=dict, blank=True, verbose_name="Neapdoroti duomenys")
