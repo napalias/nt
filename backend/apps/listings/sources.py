@@ -277,11 +277,12 @@ SOURCES: tuple[Source, ...] = (
         delay_s=3,
         schedule=Schedule(hour=6, minute=0),
         targets=_houses(
-            "https://domoplius.lt/skelbimai/namai-kotedzai-sodai/kretinga?page=1",
+            # Page 1 is the bare URL (`?page=1` redirects to it); the spider adds `?page=N`.
+            "https://domoplius.lt/skelbimai/namai-kotedzai-sodai/kretinga",
             property_type="namai",
         ),
         spider_args={**_REGION, "max_pages": "10"},
-        note="Embedded JSON; the spider still renders with Playwright until #9.",
+        note="Plain HTTP, no browser: reads the JSON embedded in div#app[data-page].",
     ),
     Source(
         spider="alio",
