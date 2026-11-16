@@ -23,6 +23,7 @@ SCAN_ENTRIES = {
         "task": RUN_SPIDER_TASK,
         "schedule": crontab(**source.schedule.crontab_kwargs()),
         "args": [source.spider],
+        "kwargs": {"trigger": "beat"},  # recorded on the ScrapeRun, not sent to the spider
     }
     for source in scheduled_sources()
 }
@@ -54,6 +55,11 @@ OTHER_ENTRIES = {
     "notify-saved-searches": {
         "task": "apps.search.tasks.notify_saved_searches",
         "schedule": crontab(minute="*/30"),
+    },
+    # Blocked / needs-human / failed / twice-empty scans: e-mail, once per source per 24 h.
+    "notify-scrape-problems": {
+        "task": "apps.listings.tasks.notify_scrape_problems",
+        "schedule": crontab(minute=45),
     },
 }
 
