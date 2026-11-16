@@ -9,6 +9,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
+from apps.classifier import ingest
 from apps.listings.models import ScrapeRun
 from apps.listings.scrape_runs import RUN_ID_SETTING, clip_start_url
 from apps.listings.scrub import scrub_text
@@ -247,8 +248,8 @@ def check_listing_validity(batch_size: int = 50) -> dict:
                 Listing.objects.filter(pk=pk).update(is_active=False)
                 deactivated += 1
             elif resp.status_code == 200:
-                body_lower = resp.text.lower()
-                if any(marker in body_lower for marker in STALE_MARKERS):
+                # The markers decide with JEV_MODE off; Jev reads the page in shadow and on.
+                if ingest.page_expired(pk, resp.text, STALE_MARKERS):
                     Listing.objects.filter(pk=pk).update(is_active=False)
                     deactivated += 1
         except requests.RequestException:

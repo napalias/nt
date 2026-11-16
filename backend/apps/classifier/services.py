@@ -8,7 +8,7 @@ from typing import Any
 import anthropic
 from django.conf import settings
 
-from apps.classifier import criteria, judge, llm
+from apps.classifier import criteria, ingest, judge, llm
 from apps.classifier.criteria import FilterResult, Status
 from apps.classifier.judge import Question
 from apps.classifier.models import LearnedPreference, ListingEvaluation, UserFeedback
@@ -286,7 +286,8 @@ def _validate_narrative(data: dict) -> dict:
 # code filters with it, per filter, in the log.
 
 JUDGE_KIND = "evaluation"
-IS_NEW_BUILD = Question.yes_no("is_new_build", criteria.NEW_BUILD_QUESTION)
+# Shared with the ingest screens (ingest.py): one question, one threshold override.
+IS_NEW_BUILD = ingest.IS_NEW_BUILD
 IS_PART_OF_HOUSE = Question.yes_no("is_part_of_house", criteria.PART_OF_HOUSE_QUESTION)
 JUDGMENTS = (IS_NEW_BUILD, IS_PART_OF_HOUSE)
 CODE_MODEL = "code"
@@ -672,16 +673,20 @@ def cleanup_description(listing: Listing, client: anthropic.Anthropic | None = N
 def cleanup_batch(limit: int = 50) -> llm.BatchResult:
     """Clean up descriptions for listings that haven't been cleaned yet.
 
+    Which listings need it is a Jev question (``ingest.NEEDS_CLEANUP``); the rewrite itself
+    stays on ``CLAUDE_FAST_MODEL`` in ``cleanup_description``. With JEV_MODE=off the old
+    marketing-words regex picks them, as before. ``ingest.cleanup_candidates`` explains what
+    shadow and on look at.
+
     ``items`` holds the ids of cleaned listings; failures are counted and logged.
     """
     client = _get_client()
-    uncleaned = Listing.objects.filter(
-        is_active=True,
-        description__regex=r"(!{2,}|SKUBIAI|PUIKI INVESTICIJA|Nepraleiskite)",
-    )[:limit]
+    off = judge.current_mode() == "off"
     result = llm.BatchResult()
-    for listing in uncleaned:
+    for listing in ingest.cleanup_candidates(limit):
         try:
+            if not off and not ingest.needs_cleanup(listing):
+                continue
             cleanup_description(listing, client=client)
             result.items.append(listing.pk)
         except Exception as exc:

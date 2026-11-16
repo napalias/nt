@@ -51,6 +51,10 @@ class ListingItem(scrapy.Item):
 
     # Pipeline-internal (set by NormalizePipeline)
     _content_hash = scrapy.Field()
+    # Pipeline-internal (set by mixed-feed spiders, read and removed by JevScreenPipeline): the
+    # spider's own code filter's verdict on "is this a house for sale?". False items reach the
+    # pipeline only while JEV_MODE is shadow or on, so Jev's answer on them is logged too.
+    _house_ad_heuristic = scrapy.Field()
 
 
 class PermitItem(scrapy.Item):

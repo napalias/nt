@@ -146,6 +146,9 @@ class Source:
     enabled: bool = True  # on the beat schedule
     built: bool = True  # a spider with this name exists in scrapers/
     needs_login: bool = False  # no spider, deliberately: listing data is behind a login
+    # The feed mixes other ads in with the houses, so each ad is also asked "is this a house
+    # for sale?" (apps/classifier/ingest.py), beside the spider's own code filter.
+    mixed_feed: bool = False
     spider_args: Mapping[str, str] = field(default_factory=dict)  # forwarded as -a
     timeout_s: int = DEFAULT_TIMEOUT_S
     note: str = ""
@@ -307,6 +310,7 @@ SOURCES: tuple[Source, ...] = (
             "https://www.alio.lt/paieska/kretingos-r-sav/?category_id=1433",
         ),
         spider_args={**_REGION, "max_pages": "5"},
+        mixed_feed=True,
         note=(
             "curl_cffi (Chrome TLS fingerprint), no browser: Scrapy's own HTTP client gets a "
             "403 here although recon's `requests` fetch got the page."
@@ -325,6 +329,7 @@ SOURCES: tuple[Source, ...] = (
             "https://www.skelbiu.lt/paieska/namai-kretingoje/",
         ),
         spider_args={**_REGION, "max_pages": "10"},
+        mixed_feed=True,
         note=(
             "curl_cffi (Chrome TLS fingerprint): listing pages answer plain HTTP with a 403. "
             "Most search hits are not Kretinga houses, so each listing page is checked."
@@ -443,6 +448,7 @@ SOURCES: tuple[Source, ...] = (
             "https://www.kretingosskelbimai.lt/skelbimai/nekilnojamas-turtas/sodybos",
         ),
         spider_args={**_REGION, "max_pages": "3"},
+        mixed_feed=True,
         note=(
             "Mixed ad types even in Namai (energy certificates, concrete work, wanted ads): "
             "code filter keeps house-for-sale ads only. Sub-categories fit one page, so "

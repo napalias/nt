@@ -10,7 +10,10 @@ import django_setup
 django_setup.setup()
 
 import requests  # noqa: E402
+from apps.classifier import ingest  # noqa: E402
+from apps.listings.scrape_runs import SCREENED_STAT  # noqa: E402
 from apps.listings.scrub import scrub_raw_data, scrub_text  # noqa: E402
+from apps.listings.sources import get_source  # noqa: E402
 from django.conf import settings  # noqa: E402
 from django.contrib.gis.geos import Point  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -50,6 +53,42 @@ class ScrubPipeline:
                 item[field] = scrub_text(item[field])
         item["raw_data"] = scrub_raw_data(dict(item.get("raw_data") or {}))
         return item
+
+
+class JevScreenPipeline:
+    """Jev's ingest screens (#18): "is this a house for sale?" on mixed-feed sources and the
+    new-build flag on every listing. See apps/classifier/ingest.py for the modes.
+
+    Runs right after the scrub and before validation, so an ad that is not a house is
+    dropped with its real reason ("Not a house for sale (Jev)", shown on /scans) and not as
+    "Missing required field". Drops count in `nt/items_screened`: they are a mixed feed
+    losing what it should lose, so they do not make a run partial. With JEV_MODE=off the
+    pipeline changes nothing. Only processes ListingItem.
+    """
+
+    def process_item(self, item: ListingItem, spider: Spider) -> ListingItem:
+        if not isinstance(item, ListingItem):
+            return item
+        heuristic = item.get("_house_ad_heuristic")
+        if "_house_ad_heuristic" in item:
+            del item["_house_ad_heuristic"]  # never reaches validation, hashing or the database
+
+        verdict = ingest.screen_listing(
+            item, mixed_feed=self._mixed_feed(spider), house_heuristic=heuristic
+        )
+        if verdict.drop_reason:
+            spider.crawler.stats.inc_value(SCREENED_STAT)
+            raise DropItem(verdict.drop_reason)
+        if verdict.is_new_construction is not None:
+            item["is_new_construction"] = verdict.is_new_construction
+        return item
+
+    @staticmethod
+    def _mixed_feed(spider: Spider) -> bool:
+        try:
+            return get_source(spider.name).mixed_feed
+        except ValueError:  # a spider that is not in the registry
+            return False
 
 
 class ValidatePipeline:
