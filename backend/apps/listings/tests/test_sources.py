@@ -35,15 +35,15 @@ LISTING_SPIDERS = {
 }
 GOV_SPIDERS = {"infostatyba", "tpdris"}
 NOT_BUILT = {
-    "realu",
-    "capital",
-    "rasknt",
     "meguvosbustas",
     "pamario-nt",
     "ntseptynetas",
     "alginosnt",
     "kretingosskelbimai",
 }
+
+# No spider on purpose: the site's data is behind a login (#13).
+NEEDS_LOGIN = {"rasknt"}
 
 # Issue #6 starting table: fetch mode per site; pamario-nt and ntseptynetas honour a
 # 10 s robots Crawl-delay.
@@ -100,11 +100,31 @@ class TestRegistryContents:
 
     def test_unbuilt_spiders_are_registered_but_disabled(self):
         unbuilt = {s.spider for s in SOURCES if not s.built}
-        assert unbuilt == NOT_BUILT
+        assert unbuilt == NOT_BUILT | NEEDS_LOGIN
         for spider in NOT_BUILT:
             source = get_source(spider)
             assert source.enabled is False
             assert source.state == State.NOT_BUILT
+
+    def test_login_walled_sources_have_no_spider_and_say_why(self):
+        assert {s.spider for s in SOURCES if s.needs_login} == NEEDS_LOGIN
+        for spider in NEEDS_LOGIN:
+            source = get_source(spider)
+            assert not source.built and not source.enabled
+            assert source.state == State.NEEDS_LOGIN
+            assert "login" in source.note.lower()
+
+    def test_realu_and_capital_are_built_and_on_the_schedule(self):
+        for spider in ("realu", "capital"):
+            source = get_source(spider)
+            assert source.built and source.enabled
+            assert source.state == State.SCHEDULED
+        assert get_source("realu").start_urls == (
+            "https://www.realu.lt/nekilnojamasis-turtas/pirkti/namas/kretingos-r-sav",
+        )
+        assert get_source("capital").start_urls == (
+            "https://www.capital.lt/lt/nekilnojamas-turtas/pirkti/kretingos-r-sav/namai",
+        )
 
     def test_rekvizitai_and_facebook_are_not_sources(self):
         for source in SOURCES:
@@ -248,6 +268,8 @@ class TestSourceInvariants:
         [
             ({"delay_s": 1}, "delay"),
             ({"built": False, "enabled": True}, "not built"),
+            ({"needs_login": True}, "needs-login"),  # built=True by default
+            ({"needs_login": True, "built": False, "enabled": True}, "not built"),
             ({"spider": "Bad Name"}, "spider name"),
             ({"spider": "x" * 33}, "spider name"),
             ({"label": " "}, "label"),

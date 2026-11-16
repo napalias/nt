@@ -116,7 +116,13 @@ def test_unknown_spider_fails() -> None:
 
 def test_unbuilt_spider_is_refused() -> None:
     with patch("subprocess.run") as run, pytest.raises(ValueError, match="not built"):
-        run_spider("realu")
+        run_spider("meguvosbustas")
+    run.assert_not_called()
+
+
+def test_login_walled_spider_is_refused() -> None:
+    with patch("subprocess.run") as run, pytest.raises(ValueError, match="not built"):
+        run_spider("rasknt")
     run.assert_not_called()
 
 

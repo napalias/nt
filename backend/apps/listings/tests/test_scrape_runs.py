@@ -111,14 +111,18 @@ class TestScrapeRunsApi:
 
     def test_summary_carries_registry_config(self):
         data = {row["spider"]: row for row in Client().get("/api/scrapes/summary").json()}
-        realu = data["realu"]  # registered, spider not written yet, never run
-        assert realu["state"] == "not_built"
-        assert realu["enabled"] is False
-        assert realu["label"] == "Realu.lt"
-        assert realu["kind"] == "listing"
-        assert realu["last_run"] is None
-        assert realu["runs_7d"] == 0
-        assert realu["listings_total"] == 0
+        meguva = data["meguvosbustas"]  # registered, spider not written yet, never run
+        assert meguva["state"] == "not_built"
+        assert meguva["enabled"] is False
+        assert meguva["label"] == "Meguvos būstas"
+        assert meguva["kind"] == "listing"
+        assert meguva["last_run"] is None
+        assert meguva["runs_7d"] == 0
+        assert meguva["listings_total"] == 0
+        assert data["rasknt"]["state"] == "needs_login"
+        assert data["rasknt"]["enabled"] is False
+        assert "login" in data["rasknt"]["note"].lower()
+        assert data["realu"]["state"] == "scheduled"
         assert data["domoplius"]["state"] == "scheduled"
         assert data["domoplius"]["fetch_mode"] == "plain"
         assert data["domoplius"]["schedule"] == "0 6 * * *"
