@@ -18,6 +18,8 @@ dependencies = [
     "celery[redis]>=5.4",
     "redis>=5.0",
     "requests>=2.32",
+    # Validity checker: browser TLS fingerprint for the sources that 403 plain HTTP.
+    "curl-cffi>=0.7",
     "pillow>=10.4",
     "python-slugify>=8.0",
     "anthropic>=0.40",

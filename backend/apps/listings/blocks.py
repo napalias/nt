@@ -7,6 +7,7 @@ stats back into ScrapeRun.block_kind (apps/listings/scrape_runs.py).
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 
 
@@ -67,3 +68,67 @@ NEEDS_HUMAN_STAT = "nt/needs_human"
 def stat_key(kind: BlockKind) -> str:
     """Scrapy stats key counting responses of this kind in one crawl."""
     return f"{STAT_PREFIX}{kind.value}"
+
+
+# --- Telling a block page from the page we asked for -------------------------------------
+# Shared by the scrapers' BlockDetectionMiddleware and the validity checker
+# (apps/listings/tasks.py), so both call the same responses blocked.
+
+# Challenge pages are small; a real page's markers sit near the top. Bound the work.
+MAX_SCAN_CHARS = 300_000
+
+# Each marker appears only on the block page itself, never on a normal page of the site.
+# Deliberately absent: "g-recaptcha" (contact forms), "_pxAppId" and Cloudflare's
+# "/cdn-cgi/challenge-platform/" script (both injected into every normal page).
+CAPTCHA_MARKERS = (
+    "px-captcha",  # PerimeterX (aruodas)
+    "access to this page has been denied",  # PerimeterX block page title
+    "captcha-delivery.com",  # DataDome
+)
+CHALLENGE_MARKERS = (
+    "_cf_chl_opt",  # Cloudflare challenge bootstrap
+    "cf-browser-verification",  # Cloudflare, older challenge page
+    "checking your browser before accessing",
+    "incapsula incident id",  # Imperva block page
+)
+CHALLENGE_TITLES = ("just a moment", "attention required! | cloudflare")
+CAPTCHA_TITLES = ("captcha", "are you a robot", "are you human", "nesate robotas")
+
+# "Prisijungimas" / "prisijungti" = log in (Lithuanian).
+LOGIN_TITLE_RE = re.compile(r"prisijung|\blog ?in\b|\bsign ?in\b", re.IGNORECASE)
+PASSWORD_INPUT_RE = re.compile(r"<input[^>]+type\s*=\s*[\"']?password", re.IGNORECASE)
+LOGIN_PATH_RE = re.compile(
+    r"(?:^|/)(?:login|log-in|signin|sign-in|prisijung[a-z]*)(?:[/?#.]|$)", re.IGNORECASE
+)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+def _path_and_query(url: str) -> str:
+    rest = url.split("://", 1)[-1]
+    slash = rest.find("/")
+    return rest[slash:] if slash >= 0 else "/"
+
+
+def classify_response(
+    status: int, url: str, text: str | None, redirected: bool = False
+) -> BlockKind | None:
+    """Why this response is not the page we asked for, or None if it is.
+
+    Body markers win over the status code, so a PerimeterX page counts as a captcha whether
+    it came with 200 or 403. A login page is one titled "log in" that has a password field
+    (a header login modal on a normal page has a normal title), or one the site redirected
+    us to. `text` is None for non-text responses: only the status speaks then.
+    """
+    body = (text or "")[:MAX_SCAN_CHARS].lower()
+    title_match = TITLE_RE.search(body)
+    title = title_match.group(1).strip() if title_match else ""
+
+    if any(m in body for m in CAPTCHA_MARKERS) or any(t in title for t in CAPTCHA_TITLES):
+        return BlockKind.CAPTCHA
+    if any(m in body for m in CHALLENGE_MARKERS) or title.startswith(CHALLENGE_TITLES):
+        return BlockKind.CHALLENGE
+    if LOGIN_TITLE_RE.search(title) and PASSWORD_INPUT_RE.search(body):
+        return BlockKind.LOGIN
+    if redirected and LOGIN_PATH_RE.search(_path_and_query(url)):
+        return BlockKind.LOGIN
+    return STATUS_KINDS.get(status)
