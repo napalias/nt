@@ -288,32 +288,36 @@ SOURCES: tuple[Source, ...] = (
         spider="alio",
         label="Alio.lt",
         kind=Kind.LISTING,
-        fetch_mode=FetchMode.PLAYWRIGHT,
+        fetch_mode=FetchMode.CURL_CFFI,
         delay_s=3,
         schedule=Schedule(hour=6, minute=20),
         targets=_houses(
-            "https://www.alio.lt/nekilnojamas-turtas/kretingos-r-sav.html?page=1",
-            property_type="namai",
+            # Category 1433 = houses, farmsteads, garden houses for sale in the district.
+            # Page 1 is this URL; the spider adds the page as `/N/` before the query.
+            "https://www.alio.lt/paieska/kretingos-r-sav/?category_id=1433",
         ),
         spider_args={**_REGION, "max_pages": "5"},
-        note="Cloudflare; try curl_cffi (#6). Listing links not matched until #12.",
+        note=(
+            "curl_cffi (Chrome TLS fingerprint), no browser: Scrapy's own HTTP client gets a "
+            "403 here although recon's `requests` fetch got the page."
+        ),
     ),
     Source(
         spider="skelbiu",
         label="Skelbiu.lt",
         kind=Kind.LISTING,
-        fetch_mode=FetchMode.PLAYWRIGHT,
+        fetch_mode=FetchMode.CURL_CFFI,
         delay_s=3,
         schedule=Schedule(hour=6, minute=40),
         targets=_houses(
-            "https://www.skelbiu.lt/skelbimai/nekilnojamasis-turtas/namai-kotedzai-sodai/",
-            property_type="namai",
+            # A keyword search, not a category: the spider keeps only Kretinga district ads
+            # under the Namai category, judged on each listing page. Pages are `/N`.
+            "https://www.skelbiu.lt/paieska/namai-kretingoje/",
         ),
         spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
         note=(
-            "Paused: the spider has no Kretinga filter and crawls non-property ads; "
-            "back on the schedule with #12. Houses-in-Kretinga URL unverified (#6)."
+            "curl_cffi (Chrome TLS fingerprint): listing pages answer plain HTTP with a 403. "
+            "Most search hits are not Kretinga houses, so each listing page is checked."
         ),
     ),
     Source(
