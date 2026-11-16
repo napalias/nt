@@ -1,17 +1,24 @@
-"""Helpers the listing-spider tests share: saved pages, fake responses, a spider with a crawler."""
+"""Helpers the listing-spider tests share: saved pages, fake responses, a spider with a crawler.
+
+No network, no database.
+"""
 
 import asyncio
+import json
 from pathlib import Path
 
 from scrapy import Request
 from scrapy.http import HtmlResponse
 from scrapy.utils.test import get_crawler
 
+from realestate_spiders.pipelines import NormalizePipeline, ScrubPipeline, ValidatePipeline
+
 FIXTURES = Path(__file__).parent / "fixtures"
 SPIDERS = Path(__file__).parent.parent / "realestate_spiders" / "spiders" / "listings"
 # Contact values the fixtures carry in place of the real ones; none may reach an item.
 PLACEHOLDER_PHONE = "+370 600 00000"
 PLACEHOLDER_EMAIL = "agent@example.invalid"
+PLACEHOLDERS = (PLACEHOLDER_PHONE, PLACEHOLDER_EMAIL, "Agentas Pavardenis", "Pavardenį")
 
 
 def read_fixture(name: str) -> str:
@@ -37,3 +44,20 @@ def collect_start(spider) -> list[Request]:
 def details_of(spider, response) -> list:
     """The items one listing page yields."""
     return list(spider.parse_detail(response))
+
+
+def split_requests(spider, requests):
+    """(detail requests, next-page requests) from what `parse_index` yielded."""
+    details = [r for r in requests if r.callback == spider.parse_detail]
+    pages = [r for r in requests if r.callback == spider.parse_index]
+    return details, pages
+
+
+def dumped(item) -> str:
+    return json.dumps(dict(item), ensure_ascii=False, default=str)
+
+
+def run_pipelines(spider, item):
+    for pipeline in (ScrubPipeline(), ValidatePipeline(), NormalizePipeline()):
+        item = pipeline.process_item(item, spider)
+    return item

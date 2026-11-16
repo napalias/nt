@@ -375,9 +375,10 @@ SOURCES: tuple[Source, ...] = (
         schedule=Schedule(hour=7, minute=40),
         targets=_houses("https://meguvosbustas.lt/paieska"),
         spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#14).",
+        note=(
+            "Plain HTML, 9 cards a page, /paieska/puslapis-N. Keeps /parduodami-namai/ cards "
+            "whose region is Kretinga. Card hrefs hold spaces: sent as '+', a '%20' gets a 403."
+        ),
     ),
     Source(
         spider="pamario-nt",
@@ -388,9 +389,11 @@ SOURCES: tuple[Source, ...] = (
         schedule=Schedule(hour=7, minute=50),
         targets=_houses("https://www.pamario-nt.lt/lt/kretinga/namai---"),
         spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#14). robots.txt asks for a 10 s crawl delay.",
+        note=(
+            "robots.txt Crawl-delay 10. With one house the start URL redirects straight to "
+            "that listing (/lt/nta/<id>-...) and the spider reads it as the detail page; the "
+            "multi-house list shape comes from the agency's Klaipeda houses page."
+        ),
     ),
     Source(
         spider="ntseptynetas",
@@ -404,8 +407,10 @@ SOURCES: tuple[Source, ...] = (
         enabled=False,
         built=False,
         note=(
-            "Spider not built yet (#14). WordPress + WPL; listing page unverified (#6). "
-            "10 s crawl delay."
+            "No spider, by design (#14, checked 2026-11-16): a WordPress services and "
+            "valuation site with no property listings. The WPL plugin is loaded but "
+            "/wp-json exposes only posts and pages, there is no listing page, and the home "
+            "page links to no object. Revisit if a listing page ever appears. 10 s crawl delay."
         ),
     ),
     Source(
@@ -415,11 +420,14 @@ SOURCES: tuple[Source, ...] = (
         fetch_mode=FetchMode.PLAIN,
         delay_s=3,
         schedule=Schedule(hour=8, minute=10),
-        targets=_houses("https://alginosnt.lt/nekilnojamas-turtas/namas"),
-        spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#14).",
+        # The site's own district filter (region 25 = Kretingos r.). A text search for
+        # "Kretinga" also returns Kretingale, which is in Klaipeda district.
+        targets=_houses("https://alginosnt.lt/search?itemType=namas&region=25"),
+        spider_args={**_REGION, "max_pages": "5"},
+        note=(
+            "Plain HTML. Cards navigate by onclick, not links; the spider reads the target "
+            "from it. Pages are &page=N (3 houses on 2026-11-16: one page)."
+        ),
     ),
     Source(
         spider="kretingosskelbimai",
@@ -428,16 +436,18 @@ SOURCES: tuple[Source, ...] = (
         fetch_mode=FetchMode.PLAIN,
         delay_s=3,
         schedule=Schedule(hour=8, minute=20),
+        # The board's own Namai and Sodybos sub-categories, not the whole real-estate category
+        # (9 pages of building materials, services and flats). The spider still filters.
         targets=_houses(
-            *(
-                f"https://www.kretingosskelbimai.lt/skelbimai/nekilnojamas-turtas/{n}.html"
-                for n in range(1, 10)
-            )
+            "https://www.kretingosskelbimai.lt/skelbimai/nekilnojamas-turtas/namai",
+            "https://www.kretingosskelbimai.lt/skelbimai/nekilnojamas-turtas/sodybos",
         ),
-        spider_args={**_REGION, "max_pages": "9"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#14). Mixed ad types: keep houses for sale only.",
+        spider_args={**_REGION, "max_pages": "3"},
+        note=(
+            "Mixed ad types even in Namai (energy certificates, concrete work, wanted ads): "
+            "code filter keeps house-for-sale ads only. Sub-categories fit one page, so "
+            "pages after the first are untested."
+        ),
     ),
     Source(
         spider="infostatyba",

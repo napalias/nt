@@ -17,7 +17,8 @@ Everything else lives here:
 - Stats: `nt/links_seen` counts distinct listing links found on index pages (including those
   not followed) and `nt/links_skipped` those a subclass chose not to follow.
 
-Pages are `?page=N` by default; override `page_url` for any other scheme. The first page is
+Pages are `?page=N` by default; override `page_url` for any other scheme, and `has_next_page`
+when the site shows whether another page exists. The first page is
 always the start URL as registered (minus a `page` parameter), because some sites redirect
 `?page=1` to the bare URL.
 """
@@ -64,6 +65,12 @@ class ListingSpider(scrapy.Spider):
         """Turn one listing page into items."""
         raise NotImplementedError
 
+    def has_next_page(self, response: Response) -> bool:
+        """Whether index page `response` can have a successor. The default is yes (the walk then
+        ends on a page with no new links); a site that shows its page links, or lists everything on
+        one page, overrides this so no request is wasted on a page that does not exist."""
+        return True
+
     def page_url(self, start_url: str, page: int) -> str:
         """URL of index page `page` of the walk that starts at `start_url`."""
         parts = urlsplit(start_url)
@@ -104,5 +111,8 @@ class ListingSpider(scrapy.Spider):
 
         if self.max_pages and page >= self.max_pages:
             self.logger.info("Reached max_pages=%d for %s, stopping", self.max_pages, start_url)
+            return
+        if not self.has_next_page(response):
+            self.logger.info("No next page after page %d of %s, stopping", page, start_url)
             return
         yield self._index_request(start_url, page + 1)

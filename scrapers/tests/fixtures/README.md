@@ -6,6 +6,16 @@ Saved pages the spider tests parse instead of the live site. They carry no conta
 |------|--------|---------|
 | `domoplius_index_kretinga_p1.html` | `https://domoplius.lt/skelbimai/namai-kotedzai-sodai/kretinga` (page 1, 20 listings) | 2026-11-15 |
 | `domoplius_detail_house.html` | `https://domoplius.lt/skelbimai/parduodamas-gyvenamasis-namas-kretingos-r-sav-kretingoje-8816944.html` | 2026-11-15 |
+| `meguvosbustas_index_p1.html` | `https://meguvosbustas.lt/paieska` (page 1, 9 cards: 3 houses, flats, plots) | 2026-11-16 |
+| `meguvosbustas_detail_house.html` | `.../parduodami-namai/Kretingos+r./5-kambariu-/649/` (village house) | 2026-11-16 |
+| `meguvosbustas_detail_house_town.html` | `.../parduodami-namai/Kretinga/2-kambariu-/624/` (half a house in town, price 0) | 2026-11-16 |
+| `pamario_nt_detail_house.html` | `https://www.pamario-nt.lt/lt/nta/37229-namas-kretinga` (what `/lt/kretinga/namai---` redirects to) | 2026-11-16 |
+| `pamario_nt_index_klaipeda_houses.html` | `https://www.pamario-nt.lt/lt/klaipeda/klpnamai` (5 cards; the only multi-object list shape seen, Kretinga has one house) | 2026-11-16 |
+| `alginosnt_index_kretingos_r.html` | `https://alginosnt.lt/search?itemType=namas&region=25` (3 houses) | 2026-11-16 |
+| `alginosnt_detail_house.html` | `https://alginosnt.lt/nekilnojamas-turtas/skelbimas/12083` | 2026-11-16 |
+| `kretingosskelbimai_index_namai.html` | `https://www.kretingosskelbimai.lt/skelbimai/nekilnojamas-turtas/namai` (12 ads, 8 are houses for sale) | 2026-11-16 |
+| `kretingosskelbimai_index_category_p1.html` | `.../skelbimai/nekilnojamas-turtas/1.html` (first 4 of 25 ads: building materials, and the pager) | 2026-11-16 |
+| `kretingosskelbimai_detail_house.html` | `.../skelbimas/259896-parduodamas-jaukiai-skoningai-irengtas-namas-guobu-aklg.-kretingoje.html` | 2026-11-16 |
 | `realu_search_page.html` | `https://www.realu.lt/nekilnojamasis-turtas/pirkti/namas/kretingos-r-sav` (the search form only) | 2026-11-16 |
 | `realu_estates_p1.json` | POST `https://www.realu.lt/index.php?route=product/category/getEstates`, page 1 (first 10 of 31 cards, photo carousels dropped) | 2026-11-16 |
 | `realu_detail_house.html` | `https://www.realu.lt/parduodamas-namas-jokubavo-k-kretingos-r-sav-66-m2-ploto-2-aukstai-realu113233` | 2026-11-16 |
@@ -22,7 +32,14 @@ Saved pages the spider tests parse instead of the live site. They carry no conta
 | `skelbiu_detail_flat.html` | a flat in Kretinga (`86968032`): in the search results, wrong category | 2026-11-16 |
 | `skelbiu_detail_timber.html` | a timber ad (`22612105`): in the search results, not property at all | 2026-11-16 |
 
-How they differ from the live pages:
+The agency fixtures (all but domoplius) are trimmed to the part of the page the spider reads
+(cards, the specs table, the description, the contact box that must NOT be read) and redacted
+by replacing, with the same text everywhere: agent names with `Agentas Pavardenis`, phones
+with `+370 600 00000`, emails with `agent@example.invalid`, broker photo URLs with
+`.../redacted.jpg`, and a Google Maps API key with `REDACTED`. Raw downloads were kept outside
+the repo and deleted. The agency name and the advertiser's own listing text are unchanged.
+
+How the domoplius fixtures differ from the live pages:
 
 - Trimmed to a minimal HTML shell around `div#app[data-page]`, the only thing the spider reads.
   Inside the JSON, props the spider does not use (navigation, SEO blocks, chat, footer links)

@@ -111,14 +111,14 @@ class TestScrapeRunsApi:
 
     def test_summary_carries_registry_config(self):
         data = {row["spider"]: row for row in Client().get("/api/scrapes/summary").json()}
-        meguva = data["meguvosbustas"]  # registered, spider not written yet, never run
-        assert meguva["state"] == "not_built"
-        assert meguva["enabled"] is False
-        assert meguva["label"] == "Meguvos būstas"
-        assert meguva["kind"] == "listing"
-        assert meguva["last_run"] is None
-        assert meguva["runs_7d"] == 0
-        assert meguva["listings_total"] == 0
+        unbuilt = data["ntseptynetas"]  # registered, no spider (site has no listings), never run
+        assert unbuilt["state"] == "not_built"
+        assert unbuilt["enabled"] is False
+        assert unbuilt["label"] == "NT Septynetas"
+        assert unbuilt["kind"] == "listing"
+        assert unbuilt["last_run"] is None
+        assert unbuilt["runs_7d"] == 0
+        assert unbuilt["listings_total"] == 0
         assert data["rasknt"]["state"] == "needs_login"
         assert data["rasknt"]["enabled"] is False
         assert "login" in data["rasknt"]["note"].lower()
