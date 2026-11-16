@@ -18,6 +18,7 @@ NON_SCAN_ENTRIES = {
     "dedup-nightly": "apps.classifier.tasks.cluster_listings",
     "check-listing-validity": "apps.listings.tasks.check_listing_validity",
     "notify-saved-searches": "apps.search.tasks.notify_saved_searches",
+    "notify-scrape-problems": "apps.listings.tasks.notify_scrape_problems",
 }
 
 SCHEDULE = celery_app.conf.beat_schedule
@@ -43,9 +44,15 @@ def test_disabled_sources_are_not_scheduled():
 
 
 def test_scan_entries_pass_no_hardcoded_args():
-    # Args live in the registry; run_spider reads them, so the beat entry carries none.
+    # Args live in the registry; run_spider reads them, so the beat entry carries no spider
+    # args. It only says the run came from the schedule (ScrapeRun.trigger, #8).
     for entry in _scan_entries().values():
-        assert not entry.get("kwargs")
+        assert entry.get("kwargs") == {"trigger": "beat"}
+
+
+def test_scrape_problem_check_runs_hourly():
+    entry = SCHEDULE["notify-scrape-problems"]
+    assert entry["schedule"] == crontab(minute=45)
 
 
 @pytest.mark.parametrize(("name", "task"), NON_SCAN_ENTRIES.items())

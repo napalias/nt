@@ -353,7 +353,7 @@ export async function fetchFullSearch(params: {
 
 // --- Scan history (/scans) ---
 
-export type ScrapeStatus = 'running' | 'ok' | 'empty' | 'blocked' | 'failed';
+export type ScrapeStatus = 'running' | 'ok' | 'partial' | 'empty' | 'blocked' | 'failed';
 
 export interface ScrapeRun {
 	id: number;

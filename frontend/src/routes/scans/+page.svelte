@@ -22,6 +22,7 @@
 	const STATUS: Record<ScrapeStatus, { label: string; cls: string }> = {
 		running: { label: 'Vykdoma', cls: 'bg-blue-50 text-blue-700 ring-blue-200' },
 		ok: { label: 'Sėkminga', cls: 'bg-green-50 text-green-700 ring-green-200' },
+		partial: { label: 'Iš dalies', cls: 'bg-amber-50 text-amber-800 ring-amber-200' },
 		empty: { label: 'Nieko neišsaugota', cls: 'bg-amber-50 text-amber-800 ring-amber-200' },
 		blocked: { label: 'Užblokuota', cls: 'bg-red-50 text-red-700 ring-red-200' },
 		failed: { label: 'Nepavyko', cls: 'bg-red-50 text-red-700 ring-red-200' }

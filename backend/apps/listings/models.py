@@ -1,6 +1,9 @@
 from django.contrib.gis.db import models as gis_models
 from django.db import models
 
+from apps.listings.blocks import LABELS as BLOCK_KIND_LABELS
+from apps.listings.blocks import BlockKind
+
 
 class Listing(models.Model):
     class PropertyType(models.TextChoices):
@@ -160,24 +163,48 @@ class ExcludedListing(models.Model):
 
 
 class ScrapeRun(models.Model):
-    """One spider run: what it crawled, found, saved and dropped. Written by the scrapers'
-    ScrapeRunRecorder extension, shown on the /scans page."""
+    """One spider run: what it crawled, found, saved and dropped, and how it ended.
+
+    Scheduled runs: `run_spider` creates the row, hands its id to the crawl, and stores the
+    log tail when the crawl exits. Inside the crawl the scrapers' ScrapeRunRecorder fills
+    in the counts and status. Hand-started `scrapy crawl` runs get a row from the recorder
+    alone. Shown on the /scans page; open problems feed /api/scrapes/attention and the
+    notification e-mail (apps/listings/notify.py)."""
 
     class Status(models.TextChoices):
         RUNNING = "running", "Vykdoma"
         OK = "ok", "Sėkminga"
+        # Saved some, but with errors, 401/403/429 answers, a block page or >30% dropped.
+        PARTIAL = "partial", "Iš dalies"
         EMPTY = "empty", "Nieko nerasta"
         BLOCKED = "blocked", "Užblokuota"
         FAILED = "failed", "Nepavyko"
+
+    class Trigger(models.TextChoices):
+        BEAT = "beat", "Pagal grafiką"
+        MANUAL = "manual", "Rankinis"
+
+    BLOCK_KIND_CHOICES = [(kind.value, BLOCK_KIND_LABELS[kind]) for kind in BlockKind]
+    # Longer start URLs are cut to this on write (apps/listings/scrape_runs.clip_start_url).
+    START_URL_MAX_LENGTH = 500
 
     spider = models.CharField(max_length=32, db_index=True, verbose_name="Šaltinis")
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.RUNNING, verbose_name="Būsena"
     )
+    trigger = models.CharField(
+        max_length=8, choices=Trigger.choices, default=Trigger.MANUAL, verbose_name="Paleista"
+    )
+    start_url = models.URLField(
+        max_length=START_URL_MAX_LENGTH, blank=True, verbose_name="Pradinis URL"
+    )
     started_at = models.DateTimeField(db_index=True, verbose_name="Pradėta")
     finished_at = models.DateTimeField(null=True, blank=True, verbose_name="Baigta")
     finish_reason = models.CharField(max_length=64, blank=True, verbose_name="Pabaigos priežastis")
     pages_crawled = models.PositiveIntegerField(default=0, verbose_name="Puslapiai")
+    # Listing links the spider saw on index pages (stat nt/links_seen), else every request
+    # the crawl queued (scheduler/enqueued).
+    links_seen = models.PositiveIntegerField(default=0, verbose_name="Matytos nuorodos")
     items_found = models.PositiveIntegerField(default=0, verbose_name="Rasta")
     items_saved = models.PositiveIntegerField(default=0, verbose_name="Išsaugota")
     items_new = models.PositiveIntegerField(default=0, verbose_name="Nauji")
@@ -186,7 +213,16 @@ class ScrapeRun(models.Model):
     items_dropped = models.PositiveIntegerField(default=0, verbose_name="Atmesti")
     errors = models.PositiveIntegerField(default=0, verbose_name="Klaidos")
     drop_reasons = models.JSONField(default=dict, blank=True, verbose_name="Atmetimo priežastys")
+    # Every spider argument (-a) the crawl got.
     args = models.JSONField(default=dict, blank=True, verbose_name="Argumentai")
+    block_kind = models.CharField(
+        max_length=16, choices=BLOCK_KIND_CHOICES, blank=True, verbose_name="Blokavimo tipas"
+    )
+    needs_human = models.BooleanField(default=False, verbose_name="Reikia žmogaus")
+    # Last lines of the crawl's log, contact data scrubbed. Scheduled runs only.
+    log_tail = models.TextField(blank=True, verbose_name="Žurnalo pabaiga")
+    # When the principal was e-mailed about this run (at most once per source per 24 h).
+    notified_at = models.DateTimeField(null=True, blank=True, verbose_name="Pranešta")
 
     class Meta:
         verbose_name = "Nuskaitymas"

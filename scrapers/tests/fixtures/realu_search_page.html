@@ -1,0 +1,203 @@
+<!DOCTYPE html><html lang="lt"><head><meta charset="utf-8"><title>Parduodami namai, Kretingos r. sav. - Nekilnojamasis turtas - Realu.lt</title></head><body>
+<form action="https://www.realu.lt/nekilnojamasis-turtas" method="GET" class="rw filter-form" id="filter-form" data-default-country-id="123">
+                    <div class="filter-group">
+                        <div class="filter filter-select select-dark filter-country">
+                            <select name="country_id" class="form-control filter-field-country">
+                                                                    <option value="123" data-slug="" selected="selected">Lietuva</option>
+                                                                    <option value="33" data-slug="bulgarija">Bulgarija</option>
+                                                                    <option value="84" data-slug="graikija">Graikija</option>
+                                                                    <option value="100" data-slug="indonezija">Indonezija</option>
+                                                                    <option value="195" data-slug="ispanija">Ispanija</option>
+                                                                    <option value="105" data-slug="italija">Italija</option>
+                                                                    <option value="53" data-slug="kroatija">Kroatija</option>
+                                                                    <option value="117" data-slug="latvija">Latvija</option>
+                                                                    <option value="260" data-slug="pietu-kipras">Pietų Kipras</option>
+                                                                    <option value="259" data-slug="prancuzija">Prancūzija</option>
+                                                                    <option value="258" data-slug="siaures-kipras">Šiaurės Kipras</option>
+                                                                    <option value="215" data-slug="turkija">Turkija</option>
+                                                                    <option value="81" data-slug="vokietija">Vokietija</option>
+                                                            </select>
+                            <input type="hidden" name="country_slug" value="">
+                        </div>
+                        <div class="filter filter-select select-dark filter1">
+                            <select name="op" class="form-control filter-field-op">
+                                                                    <option value="sale" data-slug="pirkti"  selected="selected">Pirkti</option>
+                                                                    <option value="rent" data-slug="nuomoti" >Nuomoti</option>
+                                                                    <option value="rent_short_term" data-slug="trumpalaike-nuoma" >Trumpalaikė nuoma</option>
+                                                            </select>
+                            <input type="hidden" name="op_slug" value="pirkti">
+                        </div>
+                        <div class="filter filter-select select-dark filter2">
+                            <select name="estate_type" class="form-control filter-field-estate-type">
+                                                                    <option value="" data-slug="" >Visi</option>
+                                                                    <option value="flat" data-slug="butas" >Butas</option>
+                                                                    <option value="house" data-slug="namas"  selected="selected">Namas</option>
+                                                                    <option value="commercial" data-slug="patalpos" >Patalpos</option>
+                                                                    <option value="site" data-slug="sklypas" >Sklypas</option>
+                                                                    <option value="parking" data-slug="garazas-vieta" >Garažas/vieta</option>
+                                                            </select>
+                            <input type="hidden" name="estate_type_slug" value="namas">
+                        </div>
+                        <div class="filter filter-input filter3 filter-municipality">
+                            <div class="auto-c">
+                                <div class="auto-c-wrap">
+                                    <input type="text"
+                                           value="Kretingos r. sav."
+                                           class="filter-field-municipality"
+                                           placeholder="Savivaldybė"
+                                           data-focus-placeholder="Rašyk…" />
+                                    <input type="hidden" name="mls_municipality_id" value="127" data-name="Kretingos r. sav." class="filter-field-mls-municipality-id" />
+                                    <input type="hidden" name="municipality_slug" value="kretingos-r-sav">
+                                    <div class="icon">
+                                                                                <button type="button" class="auto-c-close"><i class="icons-close"></i></button>
+                                    </div>
+                                                                    </div>
+                                <div class="auto-c-backdrop"></div>
+                            </div>
+                        </div>
+                        <div class="filter filter-input filter3 filter-city">
+                            <button type="button" class="btn-modal" data-filter-modal="cities" data-placeholder="Gyvenvietė">
+                                <span class="text">Gyvenvietė</span>
+                                <span class="icon"><i class="icons-search"></i></span>
+                            </button>
+                            <input type="hidden" name="mls_city_id" value="" data-name="" class="filter-input-mls-city-id" />
+                        </div>
+                        <div class="filter filter-input filter3 filter-abroad-city" style="display: none;">
+                            <div class="auto-c">
+                                <div class="auto-c-wrap">
+                                    <input type="text"
+                                           value=""
+                                           class="filter-field-abroad-city"
+                                           placeholder="Gyvenvietė"
+                                           data-focus-placeholder="Rašyk…" />
+                                    <input type="hidden" name="abroad_city_id" value="0" data-name="" class="filter-field-abroad-city-id" />
+                                    <input type="hidden" name="abroad_city_slug" value="">
+                                    <div class="icon">
+                                        <button type="button" class="auto-c-close"><i class="icons-close"></i></button>
+                                    </div>
+                                </div>
+                                <div class="auto-c-backdrop"></div>
+                            </div>
+                        </div>
+                        <div class="filter filter-number filter-range-toggle filter-area filter-mobile-only" title="Plotas">
+                            <div class="toggle">
+                                <input type="number" name="area_toggle" value="" placeholder="Plotas" readonly />
+                                <div class="icon">
+                                    <i class="icons-arrows-lr"></i>
+                                </div>
+                            </div>
+                            <div class="range">
+                                <div class="wrapper from">
+                                    <input type="number" step="1" name="area_from" value="" placeholder="Nuo" title="Nuo" />
+                                    <div class="suffix label-area" data-square-meter-unit="m<sup>2</sup>" data-are-unit="a">
+                                        m<sup>2</sup>
+                                    </div>
+                                </div>
+                                <div class="wrapper to">
+                                    <input type="number" step="1" name="area_to" value="" placeholder="Iki" title="Iki" />
+                                    <div class="suffix label-area" data-square-meter-unit="m<sup>2</sup>" data-are-unit="a">
+                                        m<sup>2</sup>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter filter-number filter-range-toggle filter-price" title="Kaina">
+                            <div class="toggle">
+                                <input type="number" name="price_toggle" value="" placeholder="Kaina" readonly />
+                                <div class="icon">
+                                    <i class="icons-arrows-lr"></i>
+                                </div>
+                            </div>
+                            <div class="range">
+                                <div class="wrapper from">
+                                    <input type="number" step="1" name="price_from" value="" placeholder="Nuo" title="Nuo" />
+                                    <div class="suffix label-price">
+                                        &euro;
+                                    </div>
+                                </div>
+                                <div class="wrapper to">
+                                    <input type="number" step="1" name="price_to" value="" placeholder="Iki" title="Iki" />
+                                    <div class="suffix label-price">
+                                        &euro;
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter filter-input filter-text filter-search">
+                            <div class="input-container">
+                                <input type="text" name="search" class="form-control filter-field-search" placeholder="Tekstinė paieška" value="">
+                                <div class="icon">
+                                    <i class="icons-search"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter filter-checkbox2 filter-mobile-only">
+                            <div class="checkboxes">
+                                                                    <div class="form-check form-check-only-realu">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="local"
+                                               value="1"
+                                                                                               id="checkbox-strict-simple">
+                                        <label class="form-check-label" for="checkbox-strict-simple">
+                                            Tik realu esantys objektai <button type="button" id="local-tooltip-simple" class="btn-info-circle btn-medium" title="Tik realu esantys objektai - tai unikalūs NT skelbimai, kuriuos rasi tik realu.lt portale. Atsižvelgiant į tai, kad informacijos atnaujinimas portale vyksta kas 3 valandas, galima nedidelė paklaida, kad tas pats objektas 3 valandų laikotarpyje gali būti ir realu.lt, ir kitame NT skelbimų portale. " >i</button>
+                                        </label>
+                                        <script>
+                                            new bootstrap.Tooltip(document.getElementById('local-tooltip-simple'), {
+                                                customClass: 'white'
+                                            })
+                                        </script>
+                                    </div>
+                                                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="open_doors"
+                                           value="1"
+                                                                                       id="checkbox-open-doors-simple">
+                                    <label class="form-check-label" for="checkbox-open-doors-simple">
+                                        Atviros durys <button type="button" id="open-doors-tooltip-simple" class="btn-info-circle btn-medium" title="Ieškoti tik tų skelbimų, kurie organizuoja atviras duris" >i</button>
+                                    </label>
+                                    <script>
+                                        new bootstrap.Tooltip(document.getElementById('open-doors-tooltip-simple'), {
+                                            customClass: 'white'
+                                        })
+                                    </script>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="default_customer_group_estates"
+                                           value="1"
+                                                                                       id="checkbox-default-customer-group-simple">
+                                    <label class="form-check-label" for="checkbox-default-customer-group-simple">
+                                        Tik fizinių asmenų skelbimai
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter filter-fake">
+                            <button type="button" class="btn btn-primary-grad" id="search-extended-submit">Ieškoti</button>
+                        </div>
+                        <div class="filter filter-fake last">
+                            <div class="gr">
+                                <a href="#" class="search-extended" data-show-filters-extended>Detalioji paieška</a>
+								<a href="https://www.realu.lt/isiminti" class="search-saved"><i class="icons-heart"></i> <span>Išsaugoti objektai (<span class="current-user-wishlist-total">0</span>)</span></a>
+                                                            </div>
+                        </div>
+                        <div class="filter filter-saved-mobile filter-mobile-only">
+                            <a href="https://www.realu.lt/isiminti" class="search-saved"><i class="icons-heart"></i> <span>Išsaugoti objektai</span></a>
+                        </div>
+                        <div class="filter filter-map-switch filter-mobile-only">
+                            <div class="layout-controls">
+    <button type="button" class="btn btn-primary btn-layout-list-map" data-layout="layout-list-map" data-base-url="nt-zemelapis">
+        <i class="icons-layout-list-pin"></i>
+    </button>
+    <button type="button" class="btn btn-primary btn-layout-map" data-layout="layout-map" data-base-url="nt-zemelapis">
+        <i class="icons-layout-pin"></i>
+        <span class="text">Žemėlapis</span>
+    </button>
+</div>
+                        </div>
+                    </div>
+                </form>
+</body></html>

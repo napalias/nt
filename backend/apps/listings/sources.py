@@ -56,6 +56,7 @@ class State(StrEnum):
     SCHEDULED = "scheduled"  # on the beat schedule
     PAUSED = "paused"  # spider exists but is off the schedule; `note` says why
     NOT_BUILT = "not_built"  # registered, spider not written yet
+    NEEDS_LOGIN = "needs_login"  # no spider on purpose: the data is behind a login; see `note`
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,7 @@ class Source:
     targets: tuple[Target, ...]
     enabled: bool = True  # on the beat schedule
     built: bool = True  # a spider with this name exists in scrapers/
+    needs_login: bool = False  # no spider, deliberately: listing data is behind a login
     spider_args: Mapping[str, str] = field(default_factory=dict)  # forwarded as -a
     timeout_s: int = DEFAULT_TIMEOUT_S
     note: str = ""
@@ -162,6 +164,8 @@ class Source:
             raise ValueError(f"{owner}: timeout must be positive, got {self.timeout_s}")
         if self.enabled and not self.built:
             raise ValueError(f"{owner}: cannot be enabled while its spider is not built")
+        if self.needs_login and (self.built or self.enabled):
+            raise ValueError(f"{owner}: a needs-login source has no spider and is never enabled")
         if not self.targets:
             raise ValueError(f"{owner}: needs at least one target")
         types = [t.property_type for t in self.targets]
@@ -179,6 +183,8 @@ class Source:
 
     @property
     def state(self) -> State:
+        if self.needs_login:
+            return State.NEEDS_LOGIN
         if not self.built:
             return State.NOT_BUILT
         return State.SCHEDULED if self.enabled else State.PAUSED
@@ -263,11 +269,15 @@ SOURCES: tuple[Source, ...] = (
         fetch_mode=FetchMode.PLAIN,
         delay_s=3,
         schedule=Schedule(hour=7, minute=10),
-        targets=_houses("https://www.realu.lt/"),
+        targets=_houses(
+            "https://www.realu.lt/nekilnojamasis-turtas/pirkti/namas/kretingos-r-sav",
+        ),
         spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#13). Kretinga filter URL unverified (#6).",
+        note=(
+            "Plain HTTP, no browser: reads the search form on the start URL, then POSTs the "
+            "site's own getEstates endpoint (JSON, 31 houses a page; 110 houses, 4 pages on "
+            "2026-11-16)."
+        ),
     ),
     Source(
         spider="domoplius",
@@ -288,32 +298,36 @@ SOURCES: tuple[Source, ...] = (
         spider="alio",
         label="Alio.lt",
         kind=Kind.LISTING,
-        fetch_mode=FetchMode.PLAYWRIGHT,
+        fetch_mode=FetchMode.CURL_CFFI,
         delay_s=3,
         schedule=Schedule(hour=6, minute=20),
         targets=_houses(
-            "https://www.alio.lt/nekilnojamas-turtas/kretingos-r-sav.html?page=1",
-            property_type="namai",
+            # Category 1433 = houses, farmsteads, garden houses for sale in the district.
+            # Page 1 is this URL; the spider adds the page as `/N/` before the query.
+            "https://www.alio.lt/paieska/kretingos-r-sav/?category_id=1433",
         ),
         spider_args={**_REGION, "max_pages": "5"},
-        note="Cloudflare; try curl_cffi (#6). Listing links not matched until #12.",
+        note=(
+            "curl_cffi (Chrome TLS fingerprint), no browser: Scrapy's own HTTP client gets a "
+            "403 here although recon's `requests` fetch got the page."
+        ),
     ),
     Source(
         spider="skelbiu",
         label="Skelbiu.lt",
         kind=Kind.LISTING,
-        fetch_mode=FetchMode.PLAYWRIGHT,
+        fetch_mode=FetchMode.CURL_CFFI,
         delay_s=3,
         schedule=Schedule(hour=6, minute=40),
         targets=_houses(
-            "https://www.skelbiu.lt/skelbimai/nekilnojamasis-turtas/namai-kotedzai-sodai/",
-            property_type="namai",
+            # A keyword search, not a category: the spider keeps only Kretinga district ads
+            # under the Namai category, judged on each listing page. Pages are `/N`.
+            "https://www.skelbiu.lt/paieska/namai-kretingoje/",
         ),
         spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
         note=(
-            "Paused: the spider has no Kretinga filter and crawls non-property ads; "
-            "back on the schedule with #12. Houses-in-Kretinga URL unverified (#6)."
+            "curl_cffi (Chrome TLS fingerprint): listing pages answer plain HTTP with a 403. "
+            "Most search hits are not Kretinga houses, so each listing page is checked."
         ),
     ),
     Source(
@@ -327,7 +341,13 @@ SOURCES: tuple[Source, ...] = (
         spider_args={**_REGION, "max_pages": "10"},
         enabled=False,
         built=False,
-        note="Spider not built yet (#13). Index cards only: detail pages need a login.",
+        needs_login=True,
+        note=(
+            "Needs login, no spider (#13, checked 2026-11-16). The public index cards link only "
+            "to system.rasknt.lt (login), never to the original ad, so no item could carry a "
+            "source_url; RaskNT also re-lists other portals' ads. Declares ai-train=no. No "
+            "credentials are stored."
+        ),
     ),
     Source(
         spider="capital",
@@ -336,11 +356,15 @@ SOURCES: tuple[Source, ...] = (
         fetch_mode=FetchMode.PLAIN,
         delay_s=3,
         schedule=Schedule(hour=7, minute=20),
-        targets=_houses("https://www.capital.lt/lt/nekilnojamas-turtas/kretinga"),
-        spider_args={**_REGION, "max_pages": "10"},
-        enabled=False,
-        built=False,
-        note="Spider not built yet (#13). Kretinga filter path unverified (#6).",
+        targets=_houses(
+            # Page 1 is the bare URL; all 12 results fit on it ("rezultatai (12)", no pager).
+            "https://www.capital.lt/lt/nekilnojamas-turtas/pirkti/kretingos-r-sav/namai",
+        ),
+        spider_args={**_REGION, "max_pages": "3"},
+        note=(
+            "Plain HTTP. Declares ai-train=no: the text is input to judging, never training. "
+            "No pager seen at 12 results (?page=2 is empty), so the walk stops after page 1."
+        ),
     ),
     Source(
         spider="meguvosbustas",

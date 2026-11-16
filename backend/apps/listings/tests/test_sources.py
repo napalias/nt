@@ -35,11 +35,11 @@ LISTING_SPIDERS = {
 }
 GOV_SPIDERS = {"infostatyba", "tpdris"}
 NOT_BUILT = {
-    "realu",
-    "capital",
-    "rasknt",
     "ntseptynetas",  # no listings on the site (#14): a note in the registry, no spider
 }
+
+# No spider on purpose: the site's data is behind a login (#13).
+NEEDS_LOGIN = {"rasknt"}
 
 # Issue #6 starting table: fetch mode per site; pamario-nt and ntseptynetas honour a
 # 10 s robots Crawl-delay.
@@ -47,8 +47,8 @@ FETCH_MODES = {
     "aruodas": FetchMode.PLAYWRIGHT,
     "realu": FetchMode.PLAIN,
     "domoplius": FetchMode.PLAIN,
-    "alio": FetchMode.PLAYWRIGHT,
-    "skelbiu": FetchMode.PLAYWRIGHT,
+    "alio": FetchMode.CURL_CFFI,
+    "skelbiu": FetchMode.CURL_CFFI,
     "rasknt": FetchMode.PLAIN,
     "capital": FetchMode.PLAIN,
     "meguvosbustas": FetchMode.PLAIN,
@@ -96,11 +96,31 @@ class TestRegistryContents:
 
     def test_unbuilt_spiders_are_registered_but_disabled(self):
         unbuilt = {s.spider for s in SOURCES if not s.built}
-        assert unbuilt == NOT_BUILT
+        assert unbuilt == NOT_BUILT | NEEDS_LOGIN
         for spider in NOT_BUILT:
             source = get_source(spider)
             assert source.enabled is False
             assert source.state == State.NOT_BUILT
+
+    def test_login_walled_sources_have_no_spider_and_say_why(self):
+        assert {s.spider for s in SOURCES if s.needs_login} == NEEDS_LOGIN
+        for spider in NEEDS_LOGIN:
+            source = get_source(spider)
+            assert not source.built and not source.enabled
+            assert source.state == State.NEEDS_LOGIN
+            assert "login" in source.note.lower()
+
+    def test_realu_and_capital_are_built_and_on_the_schedule(self):
+        for spider in ("realu", "capital"):
+            source = get_source(spider)
+            assert source.built and source.enabled
+            assert source.state == State.SCHEDULED
+        assert get_source("realu").start_urls == (
+            "https://www.realu.lt/nekilnojamasis-turtas/pirkti/namas/kretingos-r-sav",
+        )
+        assert get_source("capital").start_urls == (
+            "https://www.capital.lt/lt/nekilnojamas-turtas/pirkti/kretingos-r-sav/namai",
+        )
 
     def test_rekvizitai_and_facebook_are_not_sources(self):
         for source in SOURCES:
@@ -185,14 +205,20 @@ class TestScheduling:
         assert {s.spider for s in scheduled_sources()} == {s.spider for s in SOURCES if s.enabled}
         assert all(s.state == State.SCHEDULED for s in scheduled_sources())
 
-    def test_blocked_and_national_only_spiders_are_paused(self):
+    def test_blocked_spider_is_paused(self):
         # aruodas: PerimeterX + robots disallow, human-assisted only (#15).
-        # skelbiu: spider has no Kretinga filter yet (#12).
-        for spider in ("aruodas", "skelbiu"):
+        source = get_source("aruodas")
+        assert source.built and not source.enabled
+        assert source.state == State.PAUSED
+        assert source.note
+
+    def test_alio_and_skelbiu_are_back_on_the_schedule(self):
+        # repaired in #12: Kretinga-only URLs, listing-link patterns from recon
+        for spider in ("alio", "skelbiu"):
             source = get_source(spider)
-            assert source.built and not source.enabled
-            assert source.state == State.PAUSED
-            assert source.note
+            assert source.built and source.enabled
+            assert source.state == State.SCHEDULED
+            assert source.fetch_mode == FetchMode.CURL_CFFI
 
     def test_tpdris_runs_weekly(self):
         assert get_source("tpdris").schedule == Schedule(hour=4, minute=0, day_of_week="sun")
@@ -271,6 +297,8 @@ class TestSourceInvariants:
         [
             ({"delay_s": 1}, "delay"),
             ({"built": False, "enabled": True}, "not built"),
+            ({"needs_login": True}, "needs-login"),  # built=True by default
+            ({"needs_login": True, "built": False, "enabled": True}, "not built"),
             ({"spider": "Bad Name"}, "spider name"),
             ({"spider": "x" * 33}, "spider name"),
             ({"label": " "}, "label"),

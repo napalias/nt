@@ -1,4 +1,7 @@
-"""Helpers the fixture-based spider tests share (no network, no database)."""
+"""Helpers the listing-spider tests share: saved pages, fake responses, a spider with a crawler.
+
+No network, no database.
+"""
 
 import asyncio
 import json
@@ -11,9 +14,11 @@ from scrapy.utils.test import get_crawler
 from realestate_spiders.pipelines import NormalizePipeline, ScrubPipeline, ValidatePipeline
 
 FIXTURES = Path(__file__).parent / "fixtures"
-
-# What the redacted fixtures carry in place of real contact data; none may reach an item.
-PLACEHOLDERS = ("+370 600 00000", "agent@example.invalid", "Agentas Pavardenis", "Pavardenį")
+SPIDERS = Path(__file__).parent.parent / "realestate_spiders" / "spiders" / "listings"
+# Contact values the fixtures carry in place of the real ones; none may reach an item.
+PLACEHOLDER_PHONE = "+370 600 00000"
+PLACEHOLDER_EMAIL = "agent@example.invalid"
+PLACEHOLDERS = (PLACEHOLDER_PHONE, PLACEHOLDER_EMAIL, "Agentas Pavardenis", "Pavardenį")
 
 
 def read_fixture(name: str) -> str:
@@ -25,8 +30,8 @@ def make_response(url: str, markup: str, **meta) -> HtmlResponse:
     return HtmlResponse(url, body=markup.encode("utf-8"), encoding="utf-8", request=request)
 
 
-def make_spider(spider_cls, **kwargs):
-    return get_crawler(spider_cls)._create_spider(**kwargs)
+def make_spider(spider_class, **kwargs):
+    return get_crawler(spider_class)._create_spider(**kwargs)
 
 
 def collect_start(spider) -> list[Request]:
@@ -34,6 +39,11 @@ def collect_start(spider) -> list[Request]:
         return [r async for r in spider.start()]
 
     return asyncio.run(run())
+
+
+def details_of(spider, response) -> list:
+    """The items one listing page yields."""
+    return list(spider.parse_detail(response))
 
 
 def split_requests(spider, requests):
