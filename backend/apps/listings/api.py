@@ -59,7 +59,7 @@ class SpiderSummaryOut(Schema):
     # From the source registry, so never-run and not-built sources still show.
     label: str
     kind: str
-    state: str  # scheduled | paused | not_built
+    state: str  # scheduled | paused | not_built | needs_login
     enabled: bool
     fetch_mode: str
     delay_s: float
