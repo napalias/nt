@@ -388,7 +388,10 @@ def cleanup_description(listing: Listing, client: anthropic.Anthropic | None = N
     """
     from apps.classifier.prompts import CLEANUP_PROMPT
 
-    if not listing.description or len(listing.description) < 20:
+    # Clean from the portal's text (description_raw) when we have it, so cleaning is
+    # repeatable; rows scraped before description_raw existed fall back to description.
+    source_text = listing.description_raw or listing.description
+    if not source_text or len(source_text) < 20:
         return listing.description or ""
 
     client = client or _get_client()
@@ -397,12 +400,17 @@ def cleanup_description(listing: Listing, client: anthropic.Anthropic | None = N
         model=settings.CLAUDE_FAST_MODEL,
         max_tokens=CLEANUP_MAX_TOKENS,
         system=CLEANUP_PROMPT,
-        messages=[{"role": "user", "content": listing.description[:3000]}],
+        messages=[{"role": "user", "content": source_text[:3000]}],
         purpose="cleanup_description",
         effort=llm.EFFORT_FAST,
     )
+    # The scraper keeps description_clean (and description) across re-scrapes while
+    # description_raw is unchanged, so the cleanup is not undone by the next scrape.
+    if not listing.description_raw:
+        listing.description_raw = source_text
+    listing.description_clean = cleaned
     listing.description = cleaned
-    listing.save(update_fields=["description"])
+    listing.save(update_fields=["description", "description_raw", "description_clean"])
     logger.info("Cleaned description for listing %s", listing.pk)
     return cleaned
 

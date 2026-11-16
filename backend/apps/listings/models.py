@@ -15,6 +15,11 @@ class Listing(models.Model):
         SALE = "sale", "Pardavimas"
         RENT = "rent", "Nuoma"
 
+    class LocationPrecision(models.TextChoices):
+        EXACT = "exact", "Tikslus"
+        STREET = "street", "Gatvės lygio"
+        CITY = "city", "Miesto / gyvenvietės centras"
+
     class BuildingType(models.TextChoices):
         BRICK = "brick", "Mūrinis"
         BLOCK = "block", "Blokinis"
@@ -32,7 +37,13 @@ class Listing(models.Model):
 
     # --- Core listing fields ---
     title = models.CharField(max_length=500, verbose_name="Pavadinimas")
+    # `description` is the text readers use (frontend, classifier, admin): the cleaned text
+    # when one exists, else the scrubbed raw text. description_raw is what the portal said
+    # (phones/emails removed); description_clean is the AI-cleaned version. A re-scrape
+    # keeps the clean text while the raw text is unchanged.
     description = models.TextField(blank=True, verbose_name="Aprašymas")
+    description_raw = models.TextField(blank=True, verbose_name="Aprašymas (originalas)")
+    description_clean = models.TextField(blank=True, verbose_name="Aprašymas (išvalytas)")
     property_type = models.CharField(
         max_length=16, choices=PropertyType.choices, db_index=True, verbose_name="Turto tipas"
     )
@@ -86,6 +97,14 @@ class Listing(models.Model):
     )
     district = models.CharField(max_length=100, blank=True, verbose_name="Rajonas / mikrorajonas")
     location = gis_models.PointField(geography=True, srid=4326, verbose_name="Koordinatės")
+    # How good `location` is. Blank = unknown (rows scraped before this field existed).
+    location_precision = models.CharField(
+        max_length=8,
+        choices=LocationPrecision.choices,
+        blank=True,
+        default="",
+        verbose_name="Koordinačių tikslumas",
+    )
     cadastral_number = models.CharField(
         max_length=64, blank=True, db_index=True, verbose_name="Kadastro numeris"
     )
@@ -163,6 +182,7 @@ class ScrapeRun(models.Model):
     items_saved = models.PositiveIntegerField(default=0, verbose_name="Išsaugota")
     items_new = models.PositiveIntegerField(default=0, verbose_name="Nauji")
     items_updated = models.PositiveIntegerField(default=0, verbose_name="Atnaujinti")
+    items_unchanged = models.PositiveIntegerField(default=0, verbose_name="Nepakitę")
     items_dropped = models.PositiveIntegerField(default=0, verbose_name="Atmesti")
     errors = models.PositiveIntegerField(default=0, verbose_name="Klaidos")
     drop_reasons = models.JSONField(default=dict, blank=True, verbose_name="Atmetimo priežastys")

@@ -10,8 +10,10 @@ import django_setup
 django_setup.setup()
 
 import requests  # noqa: E402
+from apps.listings.scrub import scrub_raw_data, scrub_text  # noqa: E402
 from django.conf import settings  # noqa: E402
 from django.contrib.gis.geos import Point  # noqa: E402
+from django.utils import timezone  # noqa: E402
 from scrapy import Spider  # noqa: E402
 from scrapy.exceptions import DropItem  # noqa: E402
 
@@ -26,6 +28,28 @@ REQUIRED_FIELDS = ["url", "source", "title", "address", "property_type", "listin
 def _count_write(spider: Spider, created: bool) -> None:
     """New vs updated counts for the run record (ScrapeRunRecorder reads these stats)."""
     spider.crawler.stats.inc_value("nt/items_new" if created else "nt/items_updated")
+
+
+def _count_unchanged(spider: Spider) -> None:
+    """Items whose content hash matched the stored row, so nothing was rewritten."""
+    spider.crawler.stats.inc_value("nt/items_unchanged")
+
+
+class ScrubPipeline:
+    """Remove contact data before anything is validated, hashed or stored (CLAUDE.md rule 6).
+
+    Drops contact/seller/phone/email keys from raw_data, strips phone numbers and emails from
+    the title and description, and caps raw_data size. Only processes ListingItem.
+    """
+
+    def process_item(self, item: ListingItem, spider: Spider) -> ListingItem:
+        if not isinstance(item, ListingItem):
+            return item
+        for field in ("title", "description"):
+            if item.get(field):
+                item[field] = scrub_text(item[field])
+        item["raw_data"] = scrub_raw_data(dict(item.get("raw_data") or {}))
+        return item
 
 
 class ValidatePipeline:
@@ -121,15 +145,38 @@ class NormalizePipeline:
             str(item.get("area_sqm", "")),
             str(item.get("rooms", "")),
             str(item.get("title", "")),
+            str(item.get("address", "")),
+            str(item.get("description", "")),
         ]
         return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
-class GeocodePipeline:
-    """Geocode address via Nominatim if lat/lng are missing.
+def precision_from_nominatim(result: dict) -> str:
+    """How exact a Nominatim hit is: "exact" (a building), "street" or "city" (a settlement
+    or anything coarser). Uses place_rank (30 building, 26-29 street) and falls back to the
+    OSM class/type when the rank is missing."""
+    rank = result.get("place_rank")
+    if rank is not None:
+        rank = int(rank)
+        if rank >= 30:
+            return "exact"
+        if rank >= 26:
+            return "street"
+        return "city"
+    if result.get("class") == "building" or result.get("type") == "house":
+        return "exact"
+    if result.get("class") == "highway":
+        return "street"
+    return "city"
 
-    If Nominatim is unavailable, uses city-center fallback coordinates
-    so items aren't dropped. Imprecise but better than losing the listing.
+
+class GeocodePipeline:
+    """Geocode address via Nominatim if lat/lng are missing, and flag how precise it is.
+
+    Sets item["location_precision"]: "exact" for coordinates the source gave or a building
+    hit, "street" for a street hit, "city" for a settlement hit. If Nominatim is unavailable,
+    uses city-center fallback coordinates so items aren't dropped, flagged "city":
+    imprecise but better than losing the listing.
     """
 
     CITY_FALLBACK = {
@@ -217,6 +264,7 @@ class GeocodePipeline:
         if not isinstance(item, ListingItem):
             return item
         if item.get("latitude") and item.get("longitude"):
+            item["location_precision"] = item.get("location_precision") or "exact"
             return item
 
         address = self._clean_address(item.get("address", ""))
@@ -241,6 +289,7 @@ class GeocodePipeline:
                 if results:
                     item["latitude"] = float(results[0]["lat"])
                     item["longitude"] = float(results[0]["lon"])
+                    item["location_precision"] = precision_from_nominatim(results[0])
                     logger.debug(
                         "Geocoded '%s' via '%s' → (%s, %s)",
                         address, query, item["latitude"], item["longitude"],
@@ -260,6 +309,7 @@ class GeocodePipeline:
             if name in city or name in address:
                 item["latitude"] = lat
                 item["longitude"] = lng
+                item["location_precision"] = "city"
                 logger.info("Fallback geocode: %s → %s center", item.get("city"), name)
                 return
         raise DropItem(
@@ -290,11 +340,30 @@ class DjangoWritePipeline:
             v = str(val or "").strip()
             return v[:maxlen] if maxlen else v
 
+        source = s(item["source"], 32)
+        source_id = s(item["source_id"], 64)
+        content_hash = s(item.get("_content_hash"), 64)
+        raw_description = item.get("description") or ""
+
+        existing = Listing.objects.filter(source=source, source_id=source_id).first()
+
+        # Same content hash as the stored, active row: nothing to rewrite. Only record that
+        # the listing is still on the portal.
+        if existing is not None and existing.is_active and existing.content_hash == content_hash:
+            Listing.objects.filter(pk=existing.pk).update(
+                scraped_at=datetime.fromisoformat(item["scraped_at"]),
+                last_seen_at=timezone.now(),
+                is_active=True,
+            )
+            _count_unchanged(spider)
+            logger.debug("Unchanged listing %s", existing.pk)
+            return item
+
         defaults = {
             "source_url": item["url"][:500],
-            "content_hash": s(item.get("_content_hash"), 64),
+            "content_hash": content_hash,
             "title": s(item.get("title"), 500),
-            "description": item.get("description", ""),
+            "description_raw": raw_description,
             "property_type": s(item.get("property_type", "house"), 16),
             "listing_type": s(item.get("listing_type", "sale"), 8),
             "price": self._num(item.get("price")),
@@ -318,16 +387,28 @@ class DjangoWritePipeline:
                 float(item["latitude"]),
                 srid=4326,
             ),
+            "location_precision": s(item.get("location_precision"), 8),
             "cadastral_number": item.get("cadastral_number", ""),
             "photo_urls": item.get("photo_urls", []),
             "scraped_at": datetime.fromisoformat(item["scraped_at"]),
             "is_active": True,
-            "raw_data": dict(item.get("raw_data", {})),
+            "raw_data": scrub_raw_data(dict(item.get("raw_data") or {})),
         }
 
+        # `description` is what readers see. Keep the AI-cleaned text across re-scrapes as long
+        # as the portal's text is unchanged; otherwise show the new raw text and drop the
+        # stale clean version.
+        if existing is not None and existing.description_clean:
+            clean_is_current = existing.description_raw == raw_description
+        else:
+            clean_is_current = False
+        if not clean_is_current:
+            defaults["description"] = raw_description
+            defaults["description_clean"] = ""
+
         obj, created = Listing.objects.update_or_create(
-            source=s(item["source"], 32),
-            source_id=s(item["source_id"], 64),
+            source=source,
+            source_id=source_id,
             defaults=defaults,
         )
 

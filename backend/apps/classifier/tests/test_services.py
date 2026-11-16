@@ -401,6 +401,44 @@ class TestCleanupDescription:
         assert "tool_choice" not in client.messages.create.call_args.kwargs
 
     @patch("apps.classifier.services._get_client")
+    def test_keeps_raw_text_and_stores_clean_text_separately(self, mock_get_client):
+        mock_get_client.return_value = make_client(make_response(text="Namas 100 kv.m."))
+        listing = _listing(description=LONG_DESC, description_raw=LONG_DESC)
+
+        cleanup_description(listing)
+
+        listing.refresh_from_db()
+        assert listing.description_raw == LONG_DESC
+        assert listing.description_clean == "Namas 100 kv.m."
+        assert listing.description == "Namas 100 kv.m."
+
+    @patch("apps.classifier.services._get_client")
+    def test_cleans_from_raw_text_when_present(self, mock_get_client):
+        client = make_client(make_response(text="Namas 100 kv.m."))
+        mock_get_client.return_value = client
+        listing = _listing(
+            description="jau išvalytas tekstas, bet senas",
+            description_raw=LONG_DESC,
+            description_clean="jau išvalytas tekstas, bet senas",
+        )
+
+        cleanup_description(listing)
+
+        sent = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        assert sent == LONG_DESC
+
+    @patch("apps.classifier.services._get_client")
+    def test_legacy_row_without_raw_text_gets_raw_backfilled(self, mock_get_client):
+        mock_get_client.return_value = make_client(make_response(text="Namas 100 kv.m."))
+        listing = _listing(description=LONG_DESC)
+
+        cleanup_description(listing)
+
+        listing.refresh_from_db()
+        assert listing.description_raw == LONG_DESC
+        assert listing.description_clean == "Namas 100 kv.m."
+
+    @patch("apps.classifier.services._get_client")
     def test_truncated_text_does_not_overwrite_description(self, mock_get_client):
         mock_get_client.return_value = make_client(
             make_response(text="Namas 100 kv.m, 10 ar", stop_reason="max_tokens")

@@ -25,6 +25,8 @@ class ListingItem(scrapy.Item):
     district = scrapy.Field()
     latitude = scrapy.Field()
     longitude = scrapy.Field()
+    # exact / street / city, set by GeocodePipeline (city = a settlement or city-centre fallback)
+    location_precision = scrapy.Field()
     cadastral_number = scrapy.Field()
 
     # Classification
@@ -76,6 +78,11 @@ class PermitItem(scrapy.Item):
     source_url = scrapy.Field()
     raw_data = scrapy.Field()
     scraped_at = scrapy.Field()
+
+    # Pipeline-internal (set by PermitMatchPlotPipeline / PermitMatchDeveloperPipeline)
+    _plot_id = scrapy.Field()
+    _plot_centroid = scrapy.Field()
+    _applicant_id = scrapy.Field()
 
 
 class PlanningItem(scrapy.Item):
